@@ -16,7 +16,6 @@ type Tab =
   | "groupStage"
   | "knockoutStage"
   | "participants"
-  | "finalPrediction"
   | "adminPanel";
 
 type Team = AppTeam;
@@ -42,7 +41,6 @@ const navItems: { id: Tab; label: string }[] = [
   { id: "groupStage", label: "שלב הבתים" },
   { id: "knockoutStage", label: "שלב הנוקאאוט" },
   { id: "participants", label: "טבלת משתתפים" },
-  { id: "finalPrediction", label: "תחזית לזוכה" },
   { id: "adminPanel", label: "פאנל ניהול" },
 ];
 
@@ -68,13 +66,11 @@ const ui = {
   participantCount: "מספר משתתפים",
   liveMatches: "משחקים חיים",
   activeTeams: "קבוצות פעילות",
-  lastUpdate: "עדכון אחרון",
   nextMatch: "המשחק הבא",
   startsIn: "מתחיל בעוד",
   noUpcomingMatch: "אין משחק קרוב זמין",
   participants: "משתתפים",
   eliminated: "הודחו",
-  winnerPredictions: "תחזיות לזוכה",
   loading: "טוען",
   match: "משחק",
   connected: "מחובר",
@@ -129,7 +125,6 @@ const ui = {
   winnerPick: "בחירת זוכה",
   points: "נקודות",
   status: "סטטוס",
-  finalPrediction: "תחזית לזוכה",
   password: "סיסמה",
   enterAdminPassword: "הזן סיסמת מנהל",
   login: "התחברות",
@@ -480,10 +475,6 @@ export function App() {
               value={liveMatches.length}
             />
             <HeroStat label={ui.activeTeams} value={activeTeams.length} />
-            <HeroStat
-              label={ui.lastUpdate}
-              value={apiStatus.lastUpdatedAt ? formatDateTime(apiStatus.lastUpdatedAt) : ui.pending}
-            />
           </div>
         </div>
 
@@ -523,13 +514,6 @@ export function App() {
         <ParticipantsView
           activeParticipants={activeParticipants}
           eliminatedParticipants={eliminatedParticipants}
-        />
-      )}
-      {activeTab === "finalPrediction" && (
-        <FinalPredictionView
-          activeParticipants={activeParticipants}
-          eliminatedParticipants={eliminatedParticipants}
-          teams={teams}
         />
       )}
       {activeTab === "adminPanel" && (
@@ -1073,64 +1057,6 @@ function ParticipantSection({
                   <td>{participant.points}</td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function FinalPredictionView({
-  activeParticipants,
-  eliminatedParticipants,
-  teams,
-}: {
-  activeParticipants: Participant[];
-  eliminatedParticipants: Participant[];
-  teams: Team[];
-}) {
-  const participants = [...activeParticipants, ...eliminatedParticipants];
-
-  return (
-    <section className="table-panel">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">{ui.winnerPredictions}</p>
-          <h2>{ui.finalPrediction}</h2>
-        </div>
-        <span className="status-badge active">{ui.readOnly}</span>
-      </div>
-
-      {participants.length === 0 ? (
-        <p className="empty-state">{ui.noParticipants}</p>
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{ui.name}</th>
-                <th>{ui.winnerPick}</th>
-                <th>{ui.status}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {participants.map((participant) => {
-                const pickedTeam = teams.find((team) => team.name === participant.winnerPick);
-                const eliminated = pickedTeam?.status === "eliminated";
-
-                return (
-                  <tr key={participant.id}>
-                    <td>{participant.name}</td>
-                    <td>{participant.winnerPick}</td>
-                    <td>
-                      <span className={`status-badge ${eliminated ? "eliminated" : "active"}`}>
-                        {eliminated ? ui.eliminated : ui.active}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
             </tbody>
           </table>
         </div>

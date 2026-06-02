@@ -159,39 +159,6 @@ h3 {
   background: #005883;
 }
 
-.language-switcher {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 18px 0 0;
-  padding: 8px;
-  background: #ffffff;
-  border: 1px solid #dfe6ef;
-  border-radius: 8px;
-}
-
-.language-switcher span {
-  padding: 0 8px;
-  color: #506070;
-  font-weight: 900;
-}
-
-.language-switcher button {
-  padding: 10px 14px;
-  color: #506070;
-  background: #f5f7fb;
-  border: 1px solid #dfe6ef;
-  border-radius: 6px;
-  font-weight: 900;
-}
-
-.language-switcher button.active {
-  color: #ffffff;
-  background: #005883;
-  border-color: #005883;
-}
-
 .content-grid {
   display: grid;
   gap: 16px;
@@ -235,8 +202,6 @@ h3 {
 
 .match-card,
 .table-panel,
-.winner-panel,
-.forecast,
 .admin-card,
 .leaderboard-card,
 .knockout-board {
@@ -251,7 +216,6 @@ h3 {
 }
 
 .card-topline,
-.forecast-header,
 .section-heading {
   display: flex;
   align-items: center;
@@ -313,38 +277,13 @@ h3 {
   font-weight: 900;
 }
 
-.prediction-row {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 16px;
-  align-items: center;
-}
-
-.prediction-row span,
 .muted {
   display: block;
   color: #667085;
   font-size: 0.9rem;
 }
 
-.confidence,
-.forecast-bar {
-  height: 10px;
-  overflow: hidden;
-  background: #e8edf3;
-  border-radius: 999px;
-}
-
-.confidence span,
-.forecast-bar span {
-  display: block;
-  height: 100%;
-  background: #00a884;
-  border-radius: inherit;
-}
-
 .table-panel,
-.winner-panel,
 .admin-layout,
 .knockout-board {
   padding: 22px;
@@ -435,16 +374,6 @@ th {
   background: #ffe3e5;
 }
 
-.prediction-layout {
-  display: grid;
-  grid-template-columns: 0.85fr 1.15fr;
-  gap: 18px;
-}
-
-.winner-panel p {
-  color: #506070;
-}
-
 label {
   display: grid;
   gap: 8px;
@@ -460,38 +389,6 @@ input {
   background: #ffffff;
   border: 1px solid #cfd9e5;
   border-radius: 6px;
-}
-
-.forecast-list {
-  display: grid;
-  gap: 12px;
-}
-
-.forecast {
-  display: grid;
-  gap: 12px;
-  padding: 18px;
-  text-align: left;
-}
-
-.forecast.active {
-  border-color: #00a884;
-  box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.16);
-}
-
-.forecast.eliminated {
-  cursor: not-allowed;
-  opacity: 0.62;
-}
-
-.forecast p {
-  margin-bottom: 0;
-  color: #506070;
-}
-
-.forecast small {
-  color: #667085;
-  font-weight: 800;
 }
 
 .rule-note {
@@ -911,10 +808,6 @@ input {
   border-radius: 8px;
 }
 
-.empty-forecast {
-  cursor: default;
-}
-
 .compact-empty {
   margin: 0;
   padding: 12px;
@@ -1078,9 +971,7 @@ input {
 
 [dir="rtl"] .hero,
 [dir="rtl"] .tabs,
-[dir="rtl"] .language-switcher,
 [dir="rtl"] .card-topline,
-[dir="rtl"] .forecast-header,
 [dir="rtl"] .section-heading,
 [dir="rtl"] .hero-panel,
 [dir="rtl"] .inline-actions {
@@ -1088,8 +979,7 @@ input {
 }
 
 [dir="rtl"] th,
-[dir="rtl"] td,
-[dir="rtl"] .forecast {
+[dir="rtl"] td {
   text-align: right;
 }
 
@@ -1105,11 +995,6 @@ input {
   text-align: right;
 }
 
-[dir="rtl"] .confidence span,
-[dir="rtl"] .forecast-bar span {
-  margin-left: auto;
-}
-
 [dir="rtl"] .table-wrap {
   direction: rtl;
 }
@@ -1123,7 +1008,6 @@ input {
   .hero,
   .matches-grid,
   .group-layout,
-  .prediction-layout,
   .leaderboard-layout,
   .admin-grid {
     grid-template-columns: 1fr;
@@ -1143,10 +1027,6 @@ input {
 
   .hero {
     padding: 24px;
-  }
-
-  .prediction-row {
-    grid-template-columns: 1fr;
   }
 
   .real-bracket-page {
@@ -1227,15 +1107,6 @@ input {
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .language-switcher {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .language-switcher button {
-    width: 100%;
   }
 
   .tabs button {

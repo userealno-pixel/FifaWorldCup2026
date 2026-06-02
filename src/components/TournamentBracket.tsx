@@ -122,7 +122,11 @@ export function TournamentBracket({
                 <ul>
                   {group.teams.map((team) => (
                     <li key={team.name}>
-                      <span>{team.flag}</span>
+                      {team.logo ? (
+                        <img alt="" className="team-logo" src={team.logo} />
+                      ) : (
+                        <span>{team.flag}</span>
+                      )}
                       {team.name}
                     </li>
                   ))}
@@ -361,12 +365,14 @@ function toBracketMatchFromApi(match: AppMatch, round: BracketRound, matchNumber
     statusText: translateStatus(match.status, match.statusText),
     teamOne: {
       flag: getTeamFlag(match.home),
+      logo: match.homeLogo,
       name: match.home,
       score: match.homeScore,
       winner: homeWinner,
     },
     teamTwo: {
       flag: getTeamFlag(match.away),
+      logo: match.awayLogo,
       name: match.away,
       score: match.awayScore,
       winner: awayWinner,
@@ -390,6 +396,7 @@ function compareTeamsForSeeding(first: AppTeam, second: AppTeam) {
 function toBracketTeam(team: AppTeam): BracketTeam {
   return {
     flag: getTeamFlag(team.name),
+    logo: team.logo,
     name: team.name,
     score: null,
     winner: false,

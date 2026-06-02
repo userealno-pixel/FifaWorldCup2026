@@ -35,25 +35,47 @@ button {
 }
 
 .hero {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 18px;
   align-items: stretch;
-  min-height: 260px;
-  padding: 32px;
+  min-height: 250px;
+  padding: 24px;
   color: #ffffff;
   background:
-    linear-gradient(135deg, rgba(0, 88, 131, 0.95), rgba(0, 132, 116, 0.88)),
+    linear-gradient(135deg, rgba(2, 10, 26, 0.92), rgba(0, 35, 68, 0.82)),
+    radial-gradient(circle at 20% 20%, rgba(0, 168, 132, 0.35), transparent 32%),
     url("https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1800&q=80");
   background-position: center;
   background-size: cover;
   border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(0, 20, 46, 0.28);
   overflow: hidden;
 }
 
+.hero::before {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.5)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 80px);
+  content: "";
+}
+
+.hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-content {
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+}
+
 .hero-copy {
-  align-self: end;
-  max-width: 690px;
+  max-width: 760px;
 }
 
 .eyebrow {
@@ -78,7 +100,7 @@ p {
 
 h1 {
   margin-bottom: 12px;
-  font-size: clamp(2.4rem, 5vw, 4.6rem);
+  font-size: clamp(2rem, 4vw, 3.8rem);
   line-height: 0.95;
 }
 
@@ -98,29 +120,48 @@ h3 {
   font-size: 1.08rem;
 }
 
-.hero-panel {
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hero-stat-card,
+.next-match-card {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(16px);
+}
+
+.hero-stat-card {
   display: flex;
   align-items: center;
-  align-self: end;
-  gap: 14px;
-  padding: 18px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  border-radius: 8px;
-  backdrop-filter: blur(14px);
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
 }
 
-.hero-panel strong,
-.hero-panel span:last-child {
+.hero-stat-card p {
+  margin: 0 0 4px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.hero-stat-card strong {
   display: block;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: clamp(1rem, 1.5vw, 1.35rem);
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.hero-panel span:last-child {
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 0.9rem;
-}
-
-.status-dot {
+.stat-dot,
+.live-pulse {
   width: 12px;
   height: 12px;
   background: #35f29b;
@@ -128,9 +169,70 @@ h3 {
   box-shadow: 0 0 0 8px rgba(53, 242, 155, 0.16);
 }
 
-.status-dot.danger {
-  background: #ff6470;
-  box-shadow: 0 0 0 8px rgba(255, 100, 112, 0.18);
+.live-pulse {
+  background: #ff4655;
+  animation: livePulse 1.2s infinite;
+}
+
+.next-match-card {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  padding: 18px;
+}
+
+.next-match-top,
+.next-match-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.next-match-meta {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.next-match-meta strong {
+  color: #bff8df;
+}
+
+.next-match-card > strong {
+  align-self: center;
+  font-size: 1.3rem;
+}
+
+.next-match-teams {
+  display: grid;
+  gap: 10px;
+}
+
+.next-match-teams > b {
+  justify-self: center;
+  padding: 7px 12px;
+  color: #bff8df;
+  background: rgba(0, 0, 0, 0.26);
+  border-radius: 999px;
+}
+
+.next-match-teams .team-identity {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+@keyframes livePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 70, 85, 0.52);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 70, 85, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 70, 85, 0);
+  }
 }
 
 .tabs {
@@ -176,7 +278,7 @@ h3 {
 
 .fixture-row {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   padding: 14px;
   background: #f5f7fb;
   border-radius: 8px;
@@ -213,6 +315,17 @@ h3 {
 
 .match-card {
   padding: 20px;
+}
+
+.match-time-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  color: #667085;
+  font-size: 0.88rem;
+  font-weight: 800;
 }
 
 .card-topline,
@@ -262,9 +375,54 @@ h3 {
   text-align: center;
 }
 
-.team-score span {
+.team-score > span:last-child {
   font-size: 2.7rem;
   font-weight: 900;
+}
+
+.team-identity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  color: #1c2430;
+  border-radius: 8px;
+}
+
+.team-identity img,
+.team-logo {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 999px;
+}
+
+.team-identity strong {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+}
+
+.emoji-flag {
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.compact-fixture-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.compact-fixture-teams > b {
+  color: #005883;
+  font-weight: 950;
 }
 
 .time {
@@ -1026,7 +1184,12 @@ input {
   }
 
   .hero {
+    grid-template-columns: 1fr;
     padding: 24px;
+  }
+
+  .hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .real-bracket-page {
@@ -1089,19 +1252,36 @@ input {
   }
 
   .hero {
-    min-height: 360px;
+    min-height: 0;
+    padding: 18px;
   }
 
   h1 {
-    font-size: 2.7rem;
+    font-size: 2.25rem;
+  }
+
+  .hero-stats,
+  .compact-fixture-teams {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-stat-card,
+  .next-match-card {
+    padding: 12px;
   }
 
   .scoreboard {
     grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 18px 0;
   }
 
   .time {
     justify-self: center;
+  }
+
+  .team-score {
+    justify-items: center;
   }
 
   .section-heading {

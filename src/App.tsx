@@ -65,6 +65,13 @@ const ui = {
   matchesLoaded: "משחקים נטענו",
   live: "חי",
   teamsEliminated: "נבחרות הודחו",
+  participantCount: "מספר משתתפים",
+  liveMatches: "משחקים חיים",
+  activeTeams: "קבוצות פעילות",
+  lastUpdate: "עדכון אחרון",
+  nextMatch: "המשחק הבא",
+  startsIn: "מתחיל בעוד",
+  noUpcomingMatch: "אין משחק קרוב זמין",
   participants: "משתתפים",
   eliminated: "הודחו",
   winnerPredictions: "תחזיות לזוכה",
@@ -168,6 +175,62 @@ const ui = {
   adminDataNote: "נתוני מנהל נשמרים כרגע ב-React state מקומי. לפני פרודקשן יש להעביר אותם ל-Firebase, Supabase או Backend.",
 } as const;
 
+const FLAG_BY_TEAM: Record<string, string> = {
+  Algeria: "🇩🇿",
+  Argentina: "🇦🇷",
+  Australia: "🇦🇺",
+  Austria: "🇦🇹",
+  Belgium: "🇧🇪",
+  "Bosnia & Herzegovina": "🇧🇦",
+  "Bosnia and Herzegovina": "🇧🇦",
+  Brazil: "🇧🇷",
+  Canada: "🇨🇦",
+  "Cape Verde": "🇨🇻",
+  "Cape Verde Islands": "🇨🇻",
+  Colombia: "🇨🇴",
+  Croatia: "🇭🇷",
+  Curaçao: "🇨🇼",
+  "Czech Republic": "🇨🇿",
+  Czechia: "🇨🇿",
+  "DR Congo": "🇨🇩",
+  Ecuador: "🇪🇨",
+  Egypt: "🇪🇬",
+  England: "🏴",
+  France: "🇫🇷",
+  Germany: "🇩🇪",
+  Ghana: "🇬🇭",
+  Haiti: "🇭🇹",
+  Iran: "🇮🇷",
+  Iraq: "🇮🇶",
+  "Ivory Coast": "🇨🇮",
+  Japan: "🇯🇵",
+  Jordan: "🇯🇴",
+  Mexico: "🇲🇽",
+  Morocco: "🇲🇦",
+  Netherlands: "🇳🇱",
+  "New Zealand": "🇳🇿",
+  Norway: "🇳🇴",
+  Panama: "🇵🇦",
+  Paraguay: "🇵🇾",
+  Portugal: "🇵🇹",
+  Qatar: "🇶🇦",
+  "Saudi Arabia": "🇸🇦",
+  Scotland: "🏴",
+  Senegal: "🇸🇳",
+  "South Africa": "🇿🇦",
+  "South Korea": "🇰🇷",
+  Spain: "🇪🇸",
+  Sweden: "🇸🇪",
+  Switzerland: "🇨🇭",
+  Tunisia: "🇹🇳",
+  Türkiye: "🇹🇷",
+  Turkey: "🇹🇷",
+  Uruguay: "🇺🇾",
+  USA: "🇺🇸",
+  "United States": "🇺🇸",
+  Uzbekistan: "🇺🇿",
+};
+
 function formatScore(match: Match) {
   return match.homeScore === null || match.awayScore === null
     ? ui.pending
@@ -176,6 +239,14 @@ function formatScore(match: Match) {
 
 function getMatchLabel(match: Match) {
   return `${match.home} vs ${match.away}`;
+}
+
+function getTeamFlag(teamName: string) {
+  return FLAG_BY_TEAM[teamName] ?? "🏳";
+}
+
+function getTeamLogo(teamName: string, teams: Team[], matchLogo?: string) {
+  return matchLogo || teams.find((team) => team.name === teamName)?.logo || "";
 }
 
 function getRefreshInterval(matches: Match[], apiStatus: ApiFootballStatus) {
@@ -226,6 +297,18 @@ function formatDuration(ms: number) {
   if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
+}
+
+function formatCountdown(ms: number) {
+  const safeMs = Math.max(0, ms);
+  const totalMinutes = Math.floor(safeMs / 60_000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days} ימים ${hours} שעות`;
+  if (hours > 0) return `${hours} שעות ${minutes} דקות`;
+  return `${minutes} דקות`;
 }
 
 function translateStatus(status: MatchStatus) {
@@ -357,7 +440,14 @@ export function App() {
     [participants, teams],
   );
   const liveMatches = matches.filter((match) => match.status === "live");
-  const eliminatedTeams = teams.filter((team) => team.status === "eliminated");
+  const activeTeams = teams.filter((team) => team.status !== "eliminated");
+  const nextMatch = useMemo(
+    () =>
+      matches
+        .filter((match) => match.status !== "final" && match.timestamp * 1000 >= now - 15 * 60_000)
+        .sort((first, second) => first.timestamp - second.timestamp)[0],
+    [matches, now],
+  );
   const nextRefreshInMs = apiStatus.nextRefreshAt
     ? new Date(apiStatus.nextRefreshAt).getTime() - now
     : 0;
@@ -375,19 +465,29 @@ export function App() {
   return (
     <main className="app-shell" dir="rtl" lang="he">
       <section className="hero" aria-labelledby="page-title">
-        <div className="hero-copy">
-          <p className="eyebrow">FIFA World Cup 2026</p>
-          <h1 id="page-title">{ui.appTitle}</h1>
-          <p>{ui.appIntro}</p>
-        </div>
+        <div className="hero-content">
+          <div className="hero-copy">
+            <p className="eyebrow">FIFA World Cup 2026</p>
+            <h1 id="page-title">תחרות מונדיאל מתח עליון</h1>
+            <p>מעקב חי אחר משחקי המונדיאל, המשתתפים והקבוצות שנבחרו לזכייה בטורניר.</p>
+          </div>
 
-        <div className="hero-panel" aria-label="Platform snapshot">
-          <span className="status-dot" />
-          <div>
-            <strong>{matches.length} {ui.matchesLoaded}</strong>
-            <span>{liveMatches.length} {ui.live} · {eliminatedTeams.length} {ui.teamsEliminated}</span>
+          <div className="hero-stats" aria-label="סטטוס תחרות">
+            <HeroStat label={ui.participantCount} value={participants.length} />
+            <HeroStat
+              isLive={liveMatches.length > 0}
+              label={ui.liveMatches}
+              value={liveMatches.length}
+            />
+            <HeroStat label={ui.activeTeams} value={activeTeams.length} />
+            <HeroStat
+              label={ui.lastUpdate}
+              value={apiStatus.lastUpdatedAt ? formatDateTime(apiStatus.lastUpdatedAt) : ui.pending}
+            />
           </div>
         </div>
+
+        <NextMatchCard match={nextMatch} now={now} teams={teams} />
       </section>
 
       <nav className="tabs" aria-label="אזורי פלטפורמת התחזיות">
@@ -407,6 +507,7 @@ export function App() {
         <MatchScheduleView
           apiStatus={apiStatus}
           matches={matches}
+          teams={teams}
         />
       )}
       {activeTab === "bracket" && (
@@ -416,7 +517,7 @@ export function App() {
         <GroupStageView apiStatus={apiStatus} matches={matches} teams={teams} />
       )}
       {activeTab === "knockoutStage" && (
-        <KnockoutStageView apiStatus={apiStatus} matches={matches} />
+        <KnockoutStageView apiStatus={apiStatus} matches={matches} teams={teams} />
       )}
       {activeTab === "participants" && (
         <ParticipantsView
@@ -451,12 +552,79 @@ export function App() {
   );
 }
 
+function HeroStat({
+  isLive = false,
+  label,
+  value,
+}: {
+  isLive?: boolean;
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <article className="hero-stat-card">
+      <span className={isLive ? "live-pulse" : "stat-dot"} />
+      <div>
+        <p>{label}</p>
+        <strong>{value}</strong>
+      </div>
+    </article>
+  );
+}
+
+function NextMatchCard({
+  match,
+  now,
+  teams,
+}: {
+  match?: Match;
+  now: number;
+  teams: Team[];
+}) {
+  if (!match) {
+    return (
+      <aside className="next-match-card">
+        <p className="eyebrow">{ui.nextMatch}</p>
+        <strong>{ui.noUpcomingMatch}</strong>
+      </aside>
+    );
+  }
+
+  const kickoffMs = match.timestamp * 1000;
+
+  return (
+    <aside className="next-match-card" aria-label={ui.nextMatch}>
+      <div className="next-match-top">
+        <p className="eyebrow">{ui.nextMatch}</p>
+        <span className={`pill ${match.status}`}>{translateStatus(match.status)}</span>
+      </div>
+      <div className="next-match-teams">
+        <TeamIdentity
+          logo={getTeamLogo(match.home, teams, match.homeLogo)}
+          name={match.home}
+        />
+        <b>{formatScore(match)}</b>
+        <TeamIdentity
+          logo={getTeamLogo(match.away, teams, match.awayLogo)}
+          name={match.away}
+        />
+      </div>
+      <div className="next-match-meta">
+        <span>{formatMatchDateTime(match)}</span>
+        <strong>{ui.startsIn}: {formatCountdown(kickoffMs - now)}</strong>
+      </div>
+    </aside>
+  );
+}
+
 function MatchScheduleView({
   apiStatus,
   matches,
+  teams,
 }: {
   apiStatus: ApiFootballStatus;
   matches: Match[];
+  teams: Team[];
 }) {
   if (matches.length === 0) {
     return (
@@ -483,16 +651,25 @@ function MatchScheduleView({
             <span className={`pill ${match.status}`}>{translateStatus(match.status)}</span>
             <span>{translateRound(match.round)}</span>
           </div>
+          <div className="match-time-row">
+            <span>{formatMatchDateTime(match)}</span>
+            <span>{translateStatusText(match.statusText)}</span>
+          </div>
           <div className="scoreboard">
-            <TeamScore team={match.home} score={match.homeScore} />
+            <TeamScore
+              logo={getTeamLogo(match.home, teams, match.homeLogo)}
+              team={match.home}
+              score={match.homeScore}
+            />
             <span className="time">{formatScore(match)}</span>
-            <TeamScore team={match.away} score={match.awayScore} />
+            <TeamScore
+              logo={getTeamLogo(match.away, teams, match.awayLogo)}
+              team={match.away}
+              score={match.awayScore}
+            />
           </div>
           <p className="muted">
-            {formatMatchDateTime(match)} · {ui.localTime} · {translateStatusText(match.statusText)}
-          </p>
-          <p className="muted">
-            {match.stadium}, {match.city}
+            {ui.localTime} · {match.stadium}, {match.city}
           </p>
         </article>
       ))}
@@ -500,12 +677,39 @@ function MatchScheduleView({
   );
 }
 
-function TeamScore({ team, score }: { team: string; score: number | null }) {
+function TeamScore({
+  logo,
+  team,
+  score,
+}: {
+  logo?: string;
+  team: string;
+  score: number | null;
+}) {
   return (
     <div className="team-score">
-      <strong>{team}</strong>
+      <TeamIdentity logo={logo} name={team} />
       <span>{score ?? "-"}</span>
     </div>
+  );
+}
+
+function TeamIdentity({
+  logo,
+  name,
+}: {
+  logo?: string;
+  name: string;
+}) {
+  return (
+    <span className="team-identity">
+      {logo ? (
+        <img alt="" src={logo} />
+      ) : (
+        <span className="emoji-flag" aria-hidden="true">{getTeamFlag(name)}</span>
+      )}
+      <strong>{name}</strong>
+    </span>
   );
 }
 
@@ -544,7 +748,7 @@ function GroupStageView({
             <div className="section-heading">
               <div>
                 <p className="eyebrow">{ui.groupStage}</p>
-                <h2>{group}</h2>
+                <h2>{toHebrewGroupName(group)}</h2>
               </div>
               <span className="status-badge active">
                 {groupTeams.filter((team) => team.advanced).length} {ui.advancing}
@@ -574,7 +778,9 @@ function GroupStageView({
                       {groupTeams.map((team) => (
                         <tr key={team.name}>
                           <td>{team.rank ?? "-"}</td>
-                          <td>{team.name}</td>
+                          <td>
+                            <TeamIdentity logo={team.logo} name={team.name} />
+                          </td>
                           <td>{team.points ?? "-"}</td>
                           <td>{team.played ?? "-"}</td>
                           <td>{team.wins ?? "-"}</td>
@@ -599,7 +805,7 @@ function GroupStageView({
 
               <div className="mini-fixtures">
                 {fixtures.map((match) => (
-                  <CompactMatch match={match} key={match.id} />
+                  <CompactMatch match={match} key={match.id} teams={teams} />
                 ))}
               </div>
             </div>
@@ -613,9 +819,11 @@ function GroupStageView({
 function KnockoutStageView({
   apiStatus,
   matches,
+  teams,
 }: {
   apiStatus: ApiFootballStatus;
   matches: Match[];
+  teams: Team[];
 }) {
   const knockoutMatches = getOrderedKnockoutMatches(matches);
 
@@ -649,9 +857,17 @@ function KnockoutStageView({
                       <span>{translateRound(match.round)}</span>
                     </div>
                     <div className="scoreboard">
-                      <TeamScore team={match.home} score={match.homeScore} />
+                      <TeamScore
+                        logo={getTeamLogo(match.home, teams, match.homeLogo)}
+                        team={match.home}
+                        score={match.homeScore}
+                      />
                       <span className="time">{formatScore(match)}</span>
-                      <TeamScore team={match.away} score={match.awayScore} />
+                      <TeamScore
+                        logo={getTeamLogo(match.away, teams, match.awayLogo)}
+                        team={match.away}
+                        score={match.awayScore}
+                      />
                     </div>
                     <p className="muted">
                       {formatMatchDateTime(match)} · {ui.localTime} · {translateStatusText(match.statusText)}
@@ -670,11 +886,15 @@ function KnockoutStageView({
   );
 }
 
-function CompactMatch({ match }: { match: Match }) {
+function CompactMatch({ match, teams }: { match: Match; teams: Team[] }) {
   return (
     <article className="fixture-row">
-      <strong>{getMatchLabel(match)}</strong>
-      <span>{formatScore(match)} · {translateStatusText(match.statusText)}</span>
+      <div className="compact-fixture-teams">
+        <TeamIdentity logo={getTeamLogo(match.home, teams, match.homeLogo)} name={match.home} />
+        <b>{formatScore(match)}</b>
+        <TeamIdentity logo={getTeamLogo(match.away, teams, match.awayLogo)} name={match.away} />
+      </div>
+      <span>{translateRound(match.round)} · {translateStatusText(match.statusText)}</span>
       <small>{formatMatchDateTime(match)} · {ui.localTime}</small>
     </article>
   );
@@ -740,6 +960,12 @@ function getGroupIndex(group: string) {
   const match = group.match(/Group\s+([A-L])/i);
 
   return match ? match[1].toUpperCase().charCodeAt(0) : 999;
+}
+
+function toHebrewGroupName(group: string) {
+  const match = group.match(/Group\s+([A-L])/i);
+
+  return match ? `בית ${match[1].toUpperCase()}` : group;
 }
 
 function validateGroupStageData(teams: Team[], matches: Match[]) {

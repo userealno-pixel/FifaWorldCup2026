@@ -2,6 +2,7 @@ import type { AppMatchStatus } from "../services/apiFootball";
 
 export type BracketTeam = {
   flag: string;
+  logo?: string;
   name: string;
   score: number | null;
   winner: boolean;
@@ -47,9 +48,13 @@ export function BracketMatchCard({ match }: { match: BracketMatch }) {
 function TeamRow({ team }: { team: BracketTeam }) {
   return (
     <div className={`real-team-row ${team.winner ? "winner" : ""}`}>
-      <span className="team-flag" aria-hidden="true">
-        {team.flag}
-      </span>
+      {team.logo ? (
+        <img alt="" className="team-logo" src={team.logo} />
+      ) : (
+        <span className="team-flag" aria-hidden="true">
+          {team.flag}
+        </span>
+      )}
       <span className="team-name">{team.name}</span>
       <b>{team.score ?? "-"}</b>
     </div>

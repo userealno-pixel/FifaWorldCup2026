@@ -9,7 +9,7 @@ export const API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io";
 const WORLD_CUP_LEAGUE_ID = 1;
 const WORLD_CUP_SEASON = 2026;
 const API_USAGE_STORAGE_KEY = "api-football-usage";
-const API_CACHE_STORAGE_KEY = "api-football-world-cup-2026-cache-v4";
+const API_CACHE_STORAGE_KEY = "api-football-world-cup-2026-cache-v5";
 const DEFAULT_DAILY_LIMIT = 100;
 
 export type AppMatchStatus = "scheduled" | "live" | "final";
@@ -17,6 +17,7 @@ export type AppStage = "group" | "knockout";
 
 export type AppTeam = {
   name: string;
+  logo?: string;
   group: string;
   status: "active" | "eliminated";
   rank?: number;
@@ -38,7 +39,9 @@ export type AppMatch = {
   round: string;
   stage: AppStage;
   home: string;
+  homeLogo?: string;
   away: string;
+  awayLogo?: string;
   stadium: string;
   city: string;
   date: string;
@@ -107,10 +110,12 @@ type ApiFootballFixture = {
   teams: {
     home: {
       name: string;
+      logo?: string;
       winner: boolean | null;
     };
     away: {
       name: string;
+      logo?: string;
       winner: boolean | null;
     };
   };
@@ -133,6 +138,7 @@ type ApiFootballStanding = {
   };
   team: {
     name: string;
+    logo?: string;
   };
 };
 
@@ -145,6 +151,7 @@ type ApiFootballStandingsPayload = {
 type ApiFootballTeam = {
   team: {
     name: string;
+    logo?: string;
   };
 };
 
@@ -369,6 +376,7 @@ export async function getTeams() {
     endpoint: teams.endpoint,
     teams: teams.response.map((item) => ({
       name: item.team.name,
+      logo: item.team.logo,
       group: getManualGroupForTeam(item.team.name) || "TBD",
       status: "active" as const,
     })),
@@ -386,6 +394,7 @@ export async function getWorldCupStandings() {
     endpoint: standings.endpoint,
     teams: rows.map((row) => ({
       name: row.team.name,
+      logo: row.team.logo,
       group: normalizeGroupName(row.group),
       status: "active" as const,
       rank: row.rank,
@@ -510,7 +519,9 @@ function normalizeFixture(item: ApiFootballFixture): AppMatch {
     round,
     stage: groupInfo.group !== "Knockout" ? "group" : "knockout",
     home: item.teams.home.name,
+    homeLogo: item.teams.home.logo,
     away: item.teams.away.name,
+    awayLogo: item.teams.away.logo,
     stadium: item.fixture.venue?.name ?? "Venue TBD",
     city: item.fixture.venue?.city ?? "City TBD",
     date: Number.isNaN(date.getTime()) ? "Date TBD" : date.toISOString().slice(0, 10),
@@ -548,17 +559,27 @@ function mergeTeamData(apiTeams: AppTeam[], standingsTeams: AppTeam[], fixtures:
     const awayGroup = getManualGroupForTeam(fixture.away) || fixture.group;
 
     if (!teamMap.has(fixture.home)) {
-      teamMap.set(fixture.home, { name: fixture.home, group: homeGroup, status: "active" });
+      teamMap.set(fixture.home, { name: fixture.home, logo: fixture.homeLogo, group: homeGroup, status: "active" });
+    } else if (fixture.homeLogo && !teamMap.get(fixture.home)?.logo) {
+      teamMap.set(fixture.home, { ...teamMap.get(fixture.home)!, logo: fixture.homeLogo });
     }
     if (!teamMap.has(fixture.away)) {
-      teamMap.set(fixture.away, { name: fixture.away, group: awayGroup, status: "active" });
+      teamMap.set(fixture.away, { name: fixture.away, logo: fixture.awayLogo, group: awayGroup, status: "active" });
+    } else if (fixture.awayLogo && !teamMap.get(fixture.away)?.logo) {
+      teamMap.set(fixture.away, { ...teamMap.get(fixture.away)!, logo: fixture.awayLogo });
     }
   });
   standingsTeams.forEach((team) => {
     const apiGroup = normalizeGroupName(team.group);
     const group = apiGroup.startsWith("Group") ? apiGroup : getManualGroupForTeam(team.name) || apiGroup;
+    const existing = teamMap.get(team.name);
 
-    teamMap.set(team.name, { ...(teamMap.get(team.name) ?? team), ...team, group });
+    teamMap.set(team.name, {
+      ...(existing ?? team),
+      ...team,
+      logo: team.logo ?? existing?.logo,
+      group,
+    });
   });
 
   return calculateLocalStandings(Array.from(teamMap.values()), fixtures);

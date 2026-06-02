@@ -600,6 +600,16 @@ input {
   font-weight: 900;
 }
 
+.bracket-update-note {
+  margin: -8px 0 0;
+  padding: 12px 14px;
+  color: #036b4f;
+  background: #dff8ed;
+  border: 1px solid rgba(0, 168, 132, 0.3);
+  border-radius: 8px;
+  font-weight: 900;
+}
+
 .real-bracket-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;

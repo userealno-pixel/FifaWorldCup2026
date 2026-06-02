@@ -17,7 +17,6 @@ type Tab =
   | "knockoutStage"
   | "participants"
   | "finalPrediction"
-  | "adminLogin"
   | "adminPanel";
 
 type Team = AppTeam;
@@ -40,18 +39,11 @@ type MatchPrediction = {
   confidence: number;
 };
 
-type WinnerPrediction = {
-  id: number;
-  team: string;
-  probability: number;
-  note: string;
-};
-
-const ADMIN_PASSWORD = "123456";
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? "123456";
 
 // Local-only protection for this prototype. Production admin access must move
 // to real server-side auth such as Firebase Auth or Supabase Auth before launch.
-// Change the local test password above while this app is still frontend-only.
+// Keep the local test password out of the UI. Configure VITE_ADMIN_PASSWORD for deployments.
 
 const navItems: { id: Tab; labelKey: keyof Translations }[] = [
   { id: "schedule", labelKey: "matchSchedule" },
@@ -60,7 +52,6 @@ const navItems: { id: Tab; labelKey: keyof Translations }[] = [
   { id: "knockoutStage", labelKey: "knockoutStage" },
   { id: "participants", labelKey: "participantsTable" },
   { id: "finalPrediction", labelKey: "finalPrediction" },
-  { id: "adminLogin", labelKey: "adminLogin" },
   { id: "adminPanel", labelKey: "adminPanel" },
 ];
 
@@ -86,7 +77,6 @@ const translations = {
     knockoutStage: "שלב הנוקאאוט",
     participantsTable: "טבלת משתתפים",
     finalPrediction: "תחזית לזוכה",
-    adminLogin: "התחברות מנהל",
     adminPanel: "פאנל ניהול",
     appTitle: "פלטפורמת תחזיות לקריאה בלבד",
     appIntro: "משתמשים ציבוריים יכולים לצפות בלוח המשחקים, תוצאות חיות, משתתפים ותחזיות. שינויים מנוהלים רק דרך פאנל המנהל.",
@@ -159,12 +149,7 @@ const translations = {
     apiReadyToConnect: "API-Football מוכן להתחברות",
     apiKeyNotConnected: "API key is not connected yet",
     apiUnavailable: "API-Football אינו זמין כרגע",
-    championForecast: "תחזית אלופה לקריאה בלבד",
-    finalPredictionIntro: "משתמשים רגילים יכולים לצפות בתחזיות מנהל ובמשחק הגמר כאשר הוא מתפרסם. לא ניתן לערוך או להוסיף נתונים בצד הציבורי.",
-    adminPredictions: "תחזיות מנהל",
-    finalFixtureUnavailable: "משחק הגמר עדיין לא זמין.",
     noWinnerPredictions: "עדיין אין תחזיות לזוכה",
-    adminCanAddPredictions: "מנהל יכול להוסיף תחזיות לאחר התחברות.",
     activeParticipants: "משתתפים פעילים",
     eliminatedParticipants: "משתתפים שהודחו",
     noParticipants: "אין משתתפים עדיין. מנהלים יכולים להוסיף משתתפים לאחר התחברות.",
@@ -179,10 +164,10 @@ const translations = {
     logout: "התנתקות",
     incorrectPassword: "סיסמת מנהל שגויה.",
     adminLoggedIn: "המנהל מחובר.",
-    adminPasswordHelp: "סיסמה מקומית לבדיקה: 123456. ניתן לשנות אותה בקובץ src/App.tsx במשתנה ADMIN_PASSWORD.",
+    adminPasswordHelp: "יש להזין סיסמת מנהל כדי להמשיך.",
     protected: "מוגן",
     adminPanelLocked: "פאנל הניהול נעול",
-    useAdminLogin: "יש להתחבר בלשונית התחברות מנהל לפני ביצוע שינויים.",
+    useAdminLogin: "יש להתחבר לפני ביצוע שינויים.",
     adminOnly: "מנהל בלבד",
     addParticipant: "הוספת משתתף",
     editParticipant: "עריכת משתתף",
@@ -193,10 +178,6 @@ const translations = {
     prediction: "תחזית",
     confidence: "ביטחון",
     savePrediction: "שמירת תחזית",
-    addWinnerPrediction: "הוספת תחזית לזוכה",
-    probability: "הסתברות",
-    note: "הערה",
-    saveWinnerPrediction: "שמירת תחזית לזוכה",
     manualScoreUpdate: "עדכון תוצאה ידני",
     home: "בית",
     away: "חוץ",
@@ -238,7 +219,6 @@ const translations = {
     knockoutStage: "Плей-офф",
     participantsTable: "Участники",
     finalPrediction: "Прогноз победителя",
-    adminLogin: "Вход админа",
     adminPanel: "Панель админа",
     appTitle: "Платформа прогнозов только для просмотра",
     appIntro: "Публичные пользователи могут только смотреть расписание, live-счёт, участников и прогнозы. Изменения доступны только администратору.",
@@ -311,12 +291,7 @@ const translations = {
     apiReadyToConnect: "API-Football готов к подключению",
     apiKeyNotConnected: "API key is not connected yet",
     apiUnavailable: "API-Football сейчас недоступен",
-    championForecast: "Прогноз чемпиона",
-    finalPredictionIntro: "Пользователи могут просматривать прогнозы админа и финал, когда он появится в API.",
-    adminPredictions: "прогнозов админа",
-    finalFixtureUnavailable: "Финал пока недоступен.",
     noWinnerPredictions: "Прогнозов победителя пока нет",
-    adminCanAddPredictions: "Админ может добавить прогнозы после входа.",
     activeParticipants: "Активные участники",
     eliminatedParticipants: "Выбывшие участники",
     noParticipants: "Участников пока нет. Админ может добавить их после входа.",
@@ -331,10 +306,10 @@ const translations = {
     logout: "Выйти",
     incorrectPassword: "Неверный пароль администратора.",
     adminLoggedIn: "Администратор вошёл.",
-    adminPasswordHelp: "Локальный пароль: 123456. Изменить можно в src/App.tsx, ADMIN_PASSWORD.",
+    adminPasswordHelp: "Введите пароль администратора, чтобы продолжить.",
     protected: "Защищено",
     adminPanelLocked: "Панель админа закрыта",
-    useAdminLogin: "Сначала войдите во вкладке входа админа.",
+    useAdminLogin: "Сначала войдите как администратор.",
     adminOnly: "Только админ",
     addParticipant: "Добавить участника",
     editParticipant: "Редактировать участника",
@@ -345,10 +320,6 @@ const translations = {
     prediction: "Прогноз",
     confidence: "Уверенность",
     savePrediction: "Сохранить прогноз",
-    addWinnerPrediction: "Добавить прогноз победителя",
-    probability: "Вероятность",
-    note: "Заметка",
-    saveWinnerPrediction: "Сохранить прогноз победителя",
     manualScoreUpdate: "Ручное обновление счёта",
     home: "Дом",
     away: "Гости",
@@ -390,7 +361,6 @@ const translations = {
     knockoutStage: "Knockout Stage",
     participantsTable: "Participants",
     finalPrediction: "Final Prediction",
-    adminLogin: "Admin Login",
     adminPanel: "Admin Panel",
     appTitle: "Read-only prediction platform",
     appIntro: "Public users can view schedule data, live scores, participants, and predictions. Admin changes live behind a protected panel.",
@@ -463,12 +433,7 @@ const translations = {
     apiReadyToConnect: "API-Football ready to connect",
     apiKeyNotConnected: "API key is not connected yet",
     apiUnavailable: "API-Football is not available right now",
-    championForecast: "Read-only champion forecast",
-    finalPredictionIntro: "Regular users can view admin predictions and the real final fixture when API-Football publishes it.",
-    adminPredictions: "admin predictions",
-    finalFixtureUnavailable: "Final fixture is not available yet.",
     noWinnerPredictions: "No winner predictions yet",
-    adminCanAddPredictions: "Admin can add predictions after logging in.",
     activeParticipants: "Active participants",
     eliminatedParticipants: "Eliminated participants",
     noParticipants: "No participants yet. Admins can add participants after login.",
@@ -483,10 +448,10 @@ const translations = {
     logout: "Logout",
     incorrectPassword: "Incorrect admin password.",
     adminLoggedIn: "Admin is logged in.",
-    adminPasswordHelp: "Local password: 123456. Change it in src/App.tsx at ADMIN_PASSWORD.",
+    adminPasswordHelp: "Enter the admin password to continue.",
     protected: "Protected",
     adminPanelLocked: "Admin panel locked",
-    useAdminLogin: "Please use the Admin Login tab before making changes.",
+    useAdminLogin: "Please log in before making changes.",
     adminOnly: "Admin only",
     addParticipant: "Add participant",
     editParticipant: "Edit participant",
@@ -497,10 +462,6 @@ const translations = {
     prediction: "Prediction",
     confidence: "Confidence",
     savePrediction: "Save prediction",
-    addWinnerPrediction: "Add winner prediction",
-    probability: "Probability",
-    note: "Note",
-    saveWinnerPrediction: "Save winner prediction",
     manualScoreUpdate: "Manual score update",
     home: "Home",
     away: "Away",
@@ -641,7 +602,6 @@ export function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [matchPredictions, setMatchPredictions] = useState<MatchPrediction[]>([]);
-  const [winnerPredictions, setWinnerPredictions] = useState<WinnerPrediction[]>([]);
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [apiStatus, setApiStatus] = useState<ApiFootballStatus>(
@@ -814,27 +774,20 @@ export function App() {
       )}
       {activeTab === "finalPrediction" && (
         <FinalPredictionView
-          lang={language}
-          matches={matches}
+          activeParticipants={activeParticipants}
+          eliminatedParticipants={eliminatedParticipants}
           t={t}
           teams={teams}
-          winnerPredictions={winnerPredictions}
-        />
-      )}
-      {activeTab === "adminLogin" && (
-        <AdminLogin
-          adminLoggedIn={adminLoggedIn}
-          loginError={loginError}
-          onLogin={handleLogin}
-          t={t}
         />
       )}
       {activeTab === "adminPanel" && (
         <AdminPanel
           adminLoggedIn={adminLoggedIn}
           lang={language}
+          loginError={loginError}
           matchPredictions={matchPredictions}
           matches={matches}
+          onLogin={handleLogin}
           participants={participants}
           apiStatus={apiStatus}
           nextRefreshInMs={nextRefreshInMs}
@@ -843,10 +796,8 @@ export function App() {
           setMatches={setMatches}
           setParticipants={setParticipants}
           setTeams={setTeams}
-          setWinnerPredictions={setWinnerPredictions}
           teams={teams}
           t={t}
-          winnerPredictions={winnerPredictions}
         />
       )}
     </main>
@@ -1301,108 +1252,63 @@ function ParticipantSection({
 }
 
 function FinalPredictionView({
-  lang,
-  matches,
+  activeParticipants,
+  eliminatedParticipants,
   t,
   teams,
-  winnerPredictions,
 }: {
-  lang: Lang;
-  matches: Match[];
+  activeParticipants: Participant[];
+  eliminatedParticipants: Participant[];
   t: Translations;
   teams: Team[];
-  winnerPredictions: WinnerPrediction[];
 }) {
-  const finalMatch = getOrderedKnockoutMatches(matches).find(
-    (match) => normalizeRoundLabel(match.round) === "Final",
-  );
+  const participants = [...activeParticipants, ...eliminatedParticipants];
 
   return (
-    <section className="prediction-layout">
-      <div className="winner-panel">
-        <p className="eyebrow">{t.finalPrediction}</p>
-        <h2>{t.championForecast}</h2>
-        <p>{t.finalPredictionIntro}</p>
-        {finalMatch ? (
-          <div className="final-fixture">
-            <span>{t.final}</span>
-            <strong>{getMatchLabel(finalMatch)}</strong>
-            <small>{formatMatchDateTime(finalMatch, lang)} · {t.localTime} · {formatScore(finalMatch, t)}</small>
-          </div>
-        ) : (
-          <p className="empty-state">{t.finalFixtureUnavailable}</p>
-        )}
+    <section className="table-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{t.winnerPredictions}</p>
+          <h2>{t.finalPrediction}</h2>
+        </div>
+        <span className="status-badge active">{t.readOnly}</span>
       </div>
-      <div className="forecast-list">
-        {winnerPredictions.length === 0 ? (
-          <div className="forecast empty-forecast">
-            <strong>{t.noWinnerPredictions}</strong>
-            <p>{t.adminCanAddPredictions}</p>
-          </div>
-        ) : (
-          winnerPredictions.map((prediction) => {
-            const team = teams.find((item) => item.name === prediction.team);
 
-            return (
-              <article
-                className={team?.status === "eliminated" ? "forecast eliminated" : "forecast"}
-                key={prediction.id}
-              >
-                <div className="forecast-header">
-                  <strong>{prediction.team}</strong>
-                  <span>{team?.status === "eliminated" ? t.out : `${prediction.probability}%`}</span>
-                </div>
-                <div className="forecast-bar" aria-hidden="true">
-                  <span style={{ width: `${team?.status === "eliminated" ? 0 : prediction.probability}%` }} />
-                </div>
-                <p>{prediction.note}</p>
-              </article>
-            );
-          })
-        )}
-      </div>
-    </section>
-  );
-}
+      {participants.length === 0 ? (
+        <p className="empty-state">{t.noParticipants}</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{t.name}</th>
+                <th>{t.country}</th>
+                <th>{t.winnerPick}</th>
+                <th>{t.status}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {participants.map((participant) => {
+                const pickedTeam = teams.find((team) => team.name === participant.winnerPick);
+                const eliminated = pickedTeam?.status === "eliminated";
 
-function AdminLogin({
-  adminLoggedIn,
-  loginError,
-  onLogin,
-  t,
-}: {
-  adminLoggedIn: boolean;
-  loginError: string;
-  onLogin: (password: string) => void;
-  t: Translations;
-}) {
-  const [password, setPassword] = useState("");
-
-  function submitLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onLogin(password);
-    setPassword("");
-  }
-
-  return (
-    <section className="admin-layout login-panel">
-      <p className="eyebrow">{t.adminAccess}</p>
-      <h2>{t.adminLogin}</h2>
-      <p className="rule-note">{t.adminPasswordHelp}</p>
-      <form className="admin-card" onSubmit={submitLogin}>
-        <label>
-          {t.password}
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder={t.enterAdminPassword}
-          />
-        </label>
-        {loginError ? <p className="error-text">{loginError}</p> : null}
-        {adminLoggedIn ? <p className="success-text">{t.adminLoggedIn}</p> : null}
-        <button type="submit">{t.login}</button>
-      </form>
+                return (
+                  <tr key={participant.id}>
+                    <td>{participant.name}</td>
+                    <td>{participant.country}</td>
+                    <td>{participant.winnerPick}</td>
+                    <td>
+                      <span className={`status-badge ${eliminated ? "eliminated" : "active"}`}>
+                        {eliminated ? t.eliminated : t.active}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
@@ -1411,39 +1317,40 @@ function AdminPanel({
   apiStatus,
   adminLoggedIn,
   lang,
+  loginError,
   matchPredictions,
   matches,
   nextRefreshInMs,
+  onLogin,
   participants,
   setAdminLoggedIn,
   setMatchPredictions,
   setMatches,
   setParticipants,
   setTeams,
-  setWinnerPredictions,
   teams,
   t,
-  winnerPredictions,
 }: {
   apiStatus: ApiFootballStatus;
   adminLoggedIn: boolean;
   lang: Lang;
+  loginError: string;
   matchPredictions: MatchPrediction[];
   matches: Match[];
   nextRefreshInMs: number;
+  onLogin: (password: string) => void;
   participants: Participant[];
   setAdminLoggedIn: (value: boolean) => void;
   setMatchPredictions: React.Dispatch<React.SetStateAction<MatchPrediction[]>>;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
   setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
-  setWinnerPredictions: React.Dispatch<React.SetStateAction<WinnerPrediction[]>>;
   teams: Team[];
   t: Translations;
-  winnerPredictions: WinnerPrediction[];
 }) {
   const firstTeamName = teams[0]?.name ?? "";
   const firstMatchId = matches[0]?.id ?? 0;
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [participantName, setParticipantName] = useState("");
   const [participantCountry, setParticipantCountry] = useState("");
   const [participantPick, setParticipantPick] = useState(firstTeamName);
@@ -1451,9 +1358,6 @@ function AdminPanel({
   const [selectedMatchId, setSelectedMatchId] = useState(firstMatchId);
   const [matchPrediction, setMatchPrediction] = useState("");
   const [matchConfidence, setMatchConfidence] = useState(50);
-  const [winnerTeam, setWinnerTeam] = useState(firstTeamName);
-  const [winnerProbability, setWinnerProbability] = useState(20);
-  const [winnerNote, setWinnerNote] = useState("");
   const [scoreMatchId, setScoreMatchId] = useState(firstMatchId);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
@@ -1466,7 +1370,6 @@ function AdminPanel({
 
   useEffect(() => {
     if (!participantPick && firstTeamName) setParticipantPick(firstTeamName);
-    if (!winnerTeam && firstTeamName) setWinnerTeam(firstTeamName);
     if (!teamToEliminate && firstTeamName) setTeamToEliminate(firstTeamName);
     if (!selectedMatchId && firstMatchId) setSelectedMatchId(firstMatchId);
     if (!scoreMatchId && firstMatchId) setScoreMatchId(firstMatchId);
@@ -1477,15 +1380,32 @@ function AdminPanel({
     scoreMatchId,
     selectedMatchId,
     teamToEliminate,
-    winnerTeam,
   ]);
 
   if (!adminLoggedIn) {
+    function submitLogin(event: FormEvent<HTMLFormElement>) {
+      event.preventDefault();
+      onLogin(adminPasswordInput);
+      setAdminPasswordInput("");
+    }
+
     return (
-      <section className="admin-layout">
+      <section className="admin-layout login-panel">
         <p className="eyebrow">{t.protected}</p>
-        <h2>{t.adminPanelLocked}</h2>
-        <p className="empty-state">{t.useAdminLogin}</p>
+        <h2>{t.adminPanel}</h2>
+        <form className="admin-card" onSubmit={submitLogin}>
+          <label>
+            {t.password}
+            <input
+              type="password"
+              value={adminPasswordInput}
+              onChange={(event) => setAdminPasswordInput(event.target.value)}
+              placeholder={t.enterAdminPassword}
+            />
+          </label>
+          {loginError ? <p className="error-text">{loginError}</p> : null}
+          <button type="submit">{t.login}</button>
+        </form>
       </section>
     );
   }
@@ -1552,23 +1472,6 @@ function AdminPanel({
     ]);
     setMatchPrediction("");
     setMatchConfidence(50);
-  }
-
-  function saveWinnerPrediction(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!winnerNote.trim()) return;
-
-    setWinnerPredictions((current) => [
-      ...current.filter((prediction) => prediction.team !== winnerTeam),
-      {
-        id: Date.now(),
-        team: winnerTeam,
-        probability: winnerProbability,
-        note: winnerNote.trim(),
-      },
-    ]);
-    setWinnerNote("");
-    setWinnerProbability(20);
   }
 
   function updateScore(event: FormEvent<HTMLFormElement>) {
@@ -1654,30 +1557,6 @@ function AdminPanel({
             <input type="number" min="0" max="100" value={matchConfidence} onChange={(event) => setMatchConfidence(Number(event.target.value))} />
           </label>
           <button type="submit" disabled={matches.length === 0}>{t.savePrediction}</button>
-        </form>
-
-        <form className="admin-card" onSubmit={saveWinnerPrediction}>
-          <h3>{t.addWinnerPrediction}</h3>
-          {teams.length === 0 ? (
-            <p className="empty-state">{t.teamsUnavailable}</p>
-          ) : null}
-          <label>
-            {t.team}
-            <select value={winnerTeam} onChange={(event) => setWinnerTeam(event.target.value)}>
-              {teams.map((team) => (
-                <option key={team.name}>{team.name}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t.probability}
-            <input type="number" min="0" max="100" value={winnerProbability} onChange={(event) => setWinnerProbability(Number(event.target.value))} />
-          </label>
-          <label>
-            {t.note}
-            <input value={winnerNote} onChange={(event) => setWinnerNote(event.target.value)} />
-          </label>
-          <button type="submit" disabled={teams.length === 0}>{t.saveWinnerPrediction}</button>
         </form>
 
         <form className="admin-card" onSubmit={updateScore}>

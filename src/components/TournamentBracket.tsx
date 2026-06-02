@@ -1,4 +1,3 @@
-import { WORLD_CUP_2026_GROUPS } from "../data/worldCupGroups";
 import type { AppMatch, AppTeam } from "../services/apiFootball";
 import { BracketMatchCard, type BracketMatch, type BracketRound, type BracketTeam } from "./BracketMatchCard";
 
@@ -94,10 +93,10 @@ export function TournamentBracket({
   teams: AppTeam[];
 }) {
   const knockoutMatches = matches.filter((match) => match.stage === "knockout");
-  const bracketRounds = buildBracketRounds(knockoutMatches, teams);
+  const bracketRounds = buildBracketRounds(knockoutMatches);
   const groupCards = buildGroupCards(teams);
   const finalMatch = bracketRounds.final[0];
-  const champion = pickWinner(finalMatch);
+  const champion = getKnownWinner(finalMatch) ?? createPositionTeam("ייקבע לאחר הגמר");
   const thirdPlace = bracketRounds.thirdPlace[0];
 
   return (
@@ -109,6 +108,9 @@ export function TournamentBracket({
         </div>
         <span>נוקאאוט</span>
       </div>
+      <p className="bracket-update-note">
+        הקבוצות יעודכנו אוטומטית לאחר סיום שלב הבתים
+      </p>
 
       <div className="real-bracket-shell">
         <aside className="real-group-sidebar" aria-label="שלב הבתים">
@@ -189,21 +191,21 @@ function BracketRoundColumn({
   );
 }
 
-function buildBracketRounds(knockoutMatches: AppMatch[], teams: AppTeam[]) {
+function buildBracketRounds(knockoutMatches: AppMatch[]) {
   const byRound = {
-    round32: fromApiRound(knockoutMatches, "Round of 32", "round32", 1),
-    round16: fromApiRound(knockoutMatches, "Round of 16", "round16", 17),
-    quarterFinals: fromApiRound(knockoutMatches, "Quarter-finals", "quarterFinals", 25),
-    semiFinals: fromApiRound(knockoutMatches, "Semi-finals", "semiFinals", 29),
-    final: fromApiRound(knockoutMatches, "Final", "final", 31).slice(0, 1),
-    thirdPlace: fromApiRound(knockoutMatches, "Third place match", "thirdPlace", 32).slice(0, 1),
+    round32: fromApiRound(knockoutMatches, "Round of 32", "round32", 49),
+    round16: fromApiRound(knockoutMatches, "Round of 16", "round16", 65),
+    quarterFinals: fromApiRound(knockoutMatches, "Quarter-finals", "quarterFinals", 73),
+    semiFinals: fromApiRound(knockoutMatches, "Semi-finals", "semiFinals", 77),
+    final: fromApiRound(knockoutMatches, "Final", "final", 79).slice(0, 1),
+    thirdPlace: fromApiRound(knockoutMatches, "Third place match", "thirdPlace", 80).slice(0, 1),
   };
 
   if (byRound.round32.length > 0) {
     return completeApiBracket(byRound);
   }
 
-  return buildGeneratedBracket(teams);
+  return buildGeneratedBracket();
 }
 
 function completeApiBracket(rounds: Record<BracketRound, BracketMatch[]>) {
@@ -211,16 +213,16 @@ function completeApiBracket(rounds: Record<BracketRound, BracketMatch[]>) {
 
   completeRounds.round16 = completeRounds.round16.length > 0
     ? completeRounds.round16
-    : advanceRound(completeRounds.round32, "round16", 17, "שמינית הגמר");
+    : advanceRound(completeRounds.round32, "round16", 65, "שמינית הגמר");
   completeRounds.quarterFinals = completeRounds.quarterFinals.length > 0
     ? completeRounds.quarterFinals
-    : advanceRound(completeRounds.round16, "quarterFinals", 25, "רבע הגמר");
+    : advanceRound(completeRounds.round16, "quarterFinals", 73, "רבע הגמר");
   completeRounds.semiFinals = completeRounds.semiFinals.length > 0
     ? completeRounds.semiFinals
-    : advanceRound(completeRounds.quarterFinals, "semiFinals", 29, "חצי הגמר");
+    : advanceRound(completeRounds.quarterFinals, "semiFinals", 77, "חצי הגמר");
   completeRounds.final = completeRounds.final.length > 0
     ? completeRounds.final.slice(0, 1)
-    : advanceRound(completeRounds.semiFinals, "final", 31, "הגמר").slice(0, 1);
+    : advanceRound(completeRounds.semiFinals, "final", 79, "הגמר").slice(0, 1);
   completeRounds.thirdPlace = completeRounds.thirdPlace.length > 0
     ? completeRounds.thirdPlace.slice(0, 1)
     : buildThirdPlaceFromSemiFinals(completeRounds.semiFinals);
@@ -228,13 +230,12 @@ function completeApiBracket(rounds: Record<BracketRound, BracketMatch[]>) {
   return completeRounds;
 }
 
-function buildGeneratedBracket(teams: AppTeam[]) {
-  const qualifiers = getCurrentQualifiers(teams);
-  const round32 = createRoundOf32(qualifiers);
-  const round16 = advanceRound(round32, "round16", 17, "שמינית הגמר");
-  const quarterFinals = advanceRound(round16, "quarterFinals", 25, "רבע הגמר");
-  const semiFinals = advanceRound(quarterFinals, "semiFinals", 29, "חצי הגמר");
-  const final = advanceRound(semiFinals, "final", 31, "הגמר").slice(0, 1);
+function buildGeneratedBracket() {
+  const round32 = createRoundOf32();
+  const round16 = advanceRound(round32, "round16", 65, "שמינית הגמר");
+  const quarterFinals = advanceRound(round16, "quarterFinals", 73, "רבע הגמר");
+  const semiFinals = advanceRound(quarterFinals, "semiFinals", 77, "חצי הגמר");
+  const final = advanceRound(semiFinals, "final", 79, "הגמר").slice(0, 1);
   const thirdPlace = buildThirdPlaceFromSemiFinals(semiFinals);
 
   return { round32, round16, quarterFinals, semiFinals, final, thirdPlace };
@@ -252,17 +253,33 @@ function fromApiRound(
     .map((match, index) => toBracketMatchFromApi(match, round, matchOffset + index));
 }
 
-function createRoundOf32(qualifiers: BracketTeam[]) {
-  const topSeeds = qualifiers.slice(0, 16);
-  const bottomSeeds = qualifiers.slice(16, 32).reverse();
+function createRoundOf32() {
+  const pairings = [
+    ["מקום 1 בית A", "מקום 2 בית B"],
+    ["מקום 1 בית C", "מקום 2 בית D"],
+    ["מקום 1 בית E", "מקום 2 בית F"],
+    ["מקום 1 בית G", "מקום 2 בית H"],
+    ["מקום 1 בית I", "מקום 2 בית J"],
+    ["מקום 1 בית K", "מקום 2 בית L"],
+    ["מקום 1 בית B", "מקום 3 מצטיינת"],
+    ["מקום 1 בית D", "מקום 3 מצטיינת"],
+    ["מקום 1 בית F", "מקום 3 מצטיינת"],
+    ["מקום 1 בית H", "מקום 3 מצטיינת"],
+    ["מקום 1 בית J", "מקום 3 מצטיינת"],
+    ["מקום 1 בית L", "מקום 3 מצטיינת"],
+    ["מקום 2 בית A", "מקום 2 בית C"],
+    ["מקום 2 בית E", "מקום 2 בית G"],
+    ["מקום 2 בית I", "מקום 2 בית K"],
+    ["מקום 3 מצטיינת", "מקום 3 מצטיינת"],
+  ];
 
-  return topSeeds.map((teamOne, index) =>
+  return pairings.map(([teamOne, teamTwo], index) =>
     createDerivedMatch({
       id: `generated-round32-${index + 1}`,
-      matchNumber: index + 1,
+      matchNumber: 49 + index,
       round: "round32",
-      teamOne,
-      teamTwo: bottomSeeds[index],
+      teamOne: createPositionTeam(teamOne),
+      teamTwo: createPositionTeam(teamTwo),
       title: "שלב 32 האחרונות",
     }),
   );
@@ -275,8 +292,8 @@ function advanceRound(
   title: string,
 ) {
   return toPairs(sourceMatches).map((pair, index) => {
-    const teamOne = pickWinner(pair[0]);
-    const teamTwo = pickWinner(pair[1]);
+    const teamOne = getKnownWinner(pair[0]) ?? createWinnerReference(pair[0]);
+    const teamTwo = getKnownWinner(pair[1]) ?? createWinnerReference(pair[1]);
 
     return createDerivedMatch({
       id: `${round}-${index + 1}`,
@@ -295,10 +312,10 @@ function buildThirdPlaceFromSemiFinals(semiFinals: BracketMatch[]) {
   return [
     createDerivedMatch({
       id: "third-place-derived",
-      matchNumber: 32,
+      matchNumber: 63,
       round: "thirdPlace",
-      teamOne: pickLoser(semiPair[0]),
-      teamTwo: pickLoser(semiPair[1]),
+      teamOne: getKnownLoser(semiPair[0]) ?? createLoserReference(semiPair[0]),
+      teamTwo: getKnownLoser(semiPair[1]) ?? createLoserReference(semiPair[1]),
       title: "משחק על המקום השלישי",
     }),
   ];
@@ -325,7 +342,7 @@ function createDerivedMatch({
     matchNumber,
     kickoff: title,
     status: "scheduled",
-    statusText: "לפי דירוג נוכחי",
+    statusText: "יעודכן אוטומטית",
     teamOne,
     teamTwo,
   };
@@ -357,31 +374,6 @@ function toBracketMatchFromApi(match: AppMatch, round: BracketRound, matchNumber
   };
 }
 
-function getCurrentQualifiers(teams: AppTeam[]) {
-  const teamsByGroup = new Map<string, AppTeam[]>();
-
-  GROUP_NAMES.forEach((group) => {
-    const groupTeams = teams.filter((team) => team.group === group);
-    const fallbackTeams = WORLD_CUP_2026_GROUPS[group as keyof typeof WORLD_CUP_2026_GROUPS].map((name) => ({
-      name,
-      group,
-      status: "active" as const,
-      points: 0,
-      goalDifference: 0,
-      goalsFor: 0,
-    }));
-
-    teamsByGroup.set(group, sortGroupTeams(groupTeams.length > 0 ? groupTeams : fallbackTeams));
-  });
-
-  const winners = GROUP_NAMES.map((group) => teamsByGroup.get(group)?.[0]).filter(Boolean) as AppTeam[];
-  const runnersUp = GROUP_NAMES.map((group) => teamsByGroup.get(group)?.[1]).filter(Boolean) as AppTeam[];
-  const thirdPlaced = GROUP_NAMES.map((group) => teamsByGroup.get(group)?.[2]).filter(Boolean) as AppTeam[];
-  const bestThirdPlaced = thirdPlaced.sort(compareTeamsForSeeding).slice(0, 8);
-
-  return [...winners, ...runnersUp, ...bestThirdPlaced].map(toBracketTeam);
-}
-
 function sortGroupTeams(groupTeams: AppTeam[]) {
   return [...groupTeams].sort(compareTeamsForSeeding);
 }
@@ -404,8 +396,8 @@ function toBracketTeam(team: AppTeam): BracketTeam {
   };
 }
 
-function pickWinner(match?: BracketMatch): BracketTeam {
-  if (!match) return toBracketTeam({ name: "טרם נקבע", group: "", status: "active" });
+function getKnownWinner(match?: BracketMatch): BracketTeam | null {
+  if (!match) return null;
   if (match.teamOne.winner) return { ...match.teamOne, score: null, winner: false };
   if (match.teamTwo.winner) return { ...match.teamTwo, score: null, winner: false };
   if (match.teamOne.score !== null && match.teamTwo.score !== null) {
@@ -413,31 +405,44 @@ function pickWinner(match?: BracketMatch): BracketTeam {
       ? { ...match.teamOne, score: null, winner: false }
       : { ...match.teamTwo, score: null, winner: false };
   }
-  return { ...match.teamOne, score: null, winner: false };
+  return null;
 }
 
-function pickLoser(match?: BracketMatch): BracketTeam {
-  if (!match) return toBracketTeam({ name: "טרם נקבע", group: "", status: "active" });
-  const winner = pickWinner(match).name;
-  const loser = match.teamOne.name === winner ? match.teamTwo : match.teamOne;
+function getKnownLoser(match?: BracketMatch): BracketTeam | null {
+  if (!match) return null;
+  const winner = getKnownWinner(match);
+  if (!winner) return null;
+  const loser = match.teamOne.name === winner.name ? match.teamTwo : match.teamOne;
   return { ...loser, score: null, winner: false };
+}
+
+function createPositionTeam(name: string): BracketTeam {
+  return {
+    flag: "•",
+    name,
+    score: null,
+    winner: false,
+  };
+}
+
+function createWinnerReference(match?: BracketMatch): BracketTeam {
+  return createPositionTeam(match ? `מנצחת משחק ${match.matchNumber}` : "מנצחת משחק");
+}
+
+function createLoserReference(match?: BracketMatch): BracketTeam {
+  return createPositionTeam(match ? `מפסידת משחק ${match.matchNumber}` : "מפסידת משחק");
 }
 
 function buildGroupCards(teams: AppTeam[]) {
   return GROUP_NAMES.map((group) => {
     const groupTeams = teams.filter((team) => team.group === group);
-    const fallbackTeams = WORLD_CUP_2026_GROUPS[group as keyof typeof WORLD_CUP_2026_GROUPS].map((name) => ({
-      name,
-      group,
-      status: "active" as const,
-    }));
 
     return {
       name: group,
       hebrewName: toHebrewGroupName(group),
-      teams: sortGroupTeams(groupTeams.length > 0 ? groupTeams : fallbackTeams).map(toBracketTeam),
+      teams: sortGroupTeams(groupTeams).map(toBracketTeam),
     };
-  });
+  }).filter((group) => group.teams.length > 0);
 }
 
 function toPairs<T>(items: T[]) {

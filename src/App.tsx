@@ -8,6 +8,13 @@ import {
   type AppMatchStatus,
   type AppTeam,
 } from "./services/apiFootball";
+import {
+  createParticipantInSupabase,
+  deleteParticipantFromSupabase,
+  loadParticipantsFromSupabase,
+  updateParticipantInSupabase,
+  type StoredParticipant,
+} from "./services/supabaseParticipants";
 import { TournamentBracket } from "./components/TournamentBracket";
 
 type Tab =
@@ -22,12 +29,7 @@ type Team = AppTeam;
 type Match = AppMatch;
 type MatchStatus = AppMatchStatus;
 
-type Participant = {
-  id: number;
-  name: string;
-  winnerPick: string;
-  points: number;
-};
+type Participant = StoredParticipant;
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? "123456";
 
@@ -121,9 +123,11 @@ const ui = {
   activeParticipants: "משתתפים פעילים",
   eliminatedParticipants: "משתתפים שהודחו",
   noParticipants: "אין משתתפים עדיין. מנהלים יכולים להוסיף משתתפים לאחר התחברות.",
+  participantsLoading: "טוען משתתפים...",
+  databaseError: "שגיאת חיבור למסד הנתונים",
+  databaseNotReady: "Supabase עדיין לא מחובר. יש להגדיר VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY.",
   name: "שם",
   winnerPick: "בחירת זוכה",
-  points: "נקודות",
   status: "סטטוס",
   password: "סיסמה",
   enterAdminPassword: "הזן סיסמת מנהל",
@@ -167,7 +171,7 @@ const ui = {
   wrongMatchGroupWarning: "משחק משויך לבית שגוי",
   exactApiError: "שגיאת API מדויקת",
   none: "אין",
-  adminDataNote: "נתוני מנהל נשמרים כרגע ב-React state מקומי. לפני פרודקשן יש להעביר אותם ל-Firebase, Supabase או Backend.",
+  adminDataNote: "המשתתפים נשמרים ב-Supabase. לפני פרודקשן יש להחליף את ההגנה המקומית בהרשאות מנהל אמיתיות עם Supabase Auth או Firebase Auth.",
 } as const;
 
 const FLAG_BY_TEAM: Record<string, string> = {
@@ -347,6 +351,8 @@ export function App() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(true);
+  const [participantsError, setParticipantsError] = useState("");
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [apiStatus, setApiStatus] = useState<ApiFootballStatus>(
@@ -357,6 +363,34 @@ export function App() {
   useEffect(() => {
     document.documentElement.dir = "rtl";
     document.documentElement.lang = "he";
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadParticipants() {
+      setParticipantsLoading(true);
+      setParticipantsError("");
+
+      try {
+        const storedParticipants = await loadParticipantsFromSupabase();
+        if (!isMounted) return;
+        setParticipants(storedParticipants);
+      } catch (error) {
+        if (!isMounted) return;
+        const message = error instanceof Error ? error.message : ui.databaseNotReady;
+        setParticipants([]);
+        setParticipantsError(message);
+      } finally {
+        if (isMounted) setParticipantsLoading(false);
+      }
+    }
+
+    loadParticipants();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -419,20 +453,12 @@ export function App() {
   }, []);
 
   const activeParticipants = useMemo(
-    () =>
-      participants.filter(
-        (participant) =>
-          teams.find((team) => team.name === participant.winnerPick)?.status !== "eliminated",
-      ),
-    [participants, teams],
+    () => participants.filter((participant) => participant.status === "active"),
+    [participants],
   );
   const eliminatedParticipants = useMemo(
-    () =>
-      participants.filter(
-        (participant) =>
-          teams.find((team) => team.name === participant.winnerPick)?.status === "eliminated",
-      ),
-    [participants, teams],
+    () => participants.filter((participant) => participant.status === "eliminated"),
+    [participants],
   );
   const liveMatches = matches.filter((match) => match.status === "live");
   const activeTeams = teams.filter((team) => team.status !== "eliminated");
@@ -513,7 +539,9 @@ export function App() {
       {activeTab === "participants" && (
         <ParticipantsView
           activeParticipants={activeParticipants}
+          error={participantsError}
           eliminatedParticipants={eliminatedParticipants}
+          loading={participantsLoading}
         />
       )}
       {activeTab === "adminPanel" && (
@@ -523,9 +551,12 @@ export function App() {
           matches={matches}
           onLogin={handleLogin}
           participants={participants}
+          participantsError={participantsError}
+          participantsLoading={participantsLoading}
           apiStatus={apiStatus}
           nextRefreshInMs={nextRefreshInMs}
           setAdminLoggedIn={setAdminLoggedIn}
+          setParticipantsError={setParticipantsError}
           setMatches={setMatches}
           setParticipants={setParticipants}
           setTeams={setTeams}
@@ -1003,11 +1034,33 @@ function validateGroupStageData(teams: Team[], matches: Match[]) {
 
 function ParticipantsView({
   activeParticipants,
+  error,
   eliminatedParticipants,
+  loading,
 }: {
   activeParticipants: Participant[];
+  error: string;
   eliminatedParticipants: Participant[];
+  loading: boolean;
 }) {
+  if (loading) {
+    return <p className="empty-state">{ui.participantsLoading}</p>;
+  }
+
+  if (error) {
+    return (
+      <section className="table-panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">{ui.databaseError}</p>
+            <h2>{ui.participants}</h2>
+          </div>
+        </div>
+        <p className="empty-state">{error}</p>
+      </section>
+    );
+  }
+
   return (
     <section className="stacked-panels">
       <ParticipantSection participants={activeParticipants} status="active" title={ui.activeParticipants} />
@@ -1046,15 +1099,15 @@ function ParticipantSection({
               <tr>
                 <th>{ui.name}</th>
                 <th>{ui.winnerPick}</th>
-                <th>{ui.points}</th>
+                <th>{ui.status}</th>
               </tr>
             </thead>
             <tbody>
               {participants.map((participant) => (
                 <tr key={participant.id}>
                   <td>{participant.name}</td>
-                  <td>{participant.winnerPick}</td>
-                  <td>{participant.points}</td>
+                  <td>{participant.selectedChampionTeam}</td>
+                  <td>{statusLabel}</td>
                 </tr>
               ))}
             </tbody>
@@ -1073,9 +1126,12 @@ function AdminPanel({
   nextRefreshInMs,
   onLogin,
   participants,
+  participantsError,
+  participantsLoading,
   setAdminLoggedIn,
   setMatches,
   setParticipants,
+  setParticipantsError,
   setTeams,
   teams,
 }: {
@@ -1086,9 +1142,12 @@ function AdminPanel({
   nextRefreshInMs: number;
   onLogin: (password: string) => void;
   participants: Participant[];
+  participantsError: string;
+  participantsLoading: boolean;
   setAdminLoggedIn: (value: boolean) => void;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
   setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
+  setParticipantsError: React.Dispatch<React.SetStateAction<string>>;
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
   teams: Team[];
 }) {
@@ -1097,7 +1156,8 @@ function AdminPanel({
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [participantName, setParticipantName] = useState("");
   const [participantPick, setParticipantPick] = useState(firstTeamName);
-  const [editingParticipantId, setEditingParticipantId] = useState<number | null>(null);
+  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+  const [participantSaving, setParticipantSaving] = useState(false);
   const [scoreMatchId, setScoreMatchId] = useState(firstMatchId);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
@@ -1148,47 +1208,66 @@ function AdminPanel({
     );
   }
 
-  function saveParticipant(event: FormEvent<HTMLFormElement>) {
+  async function saveParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!participantName.trim()) return;
+    if (!participantName.trim() || participantSaving) return;
 
-    if (editingParticipantId !== null) {
-      setParticipants((current) =>
-        current.map((participant) =>
-          participant.id === editingParticipantId
-            ? {
-                ...participant,
-                name: participantName.trim(),
-                winnerPick: participantPick,
-              }
-            : participant,
-        ),
-      );
-      setEditingParticipantId(null);
-    } else {
-      setParticipants((current) => [
-        ...current,
-        {
-          id: Date.now(),
+    const participantStatus = teams.find((team) => team.name === participantPick)?.status === "eliminated"
+      ? "eliminated"
+      : "active";
+
+    setParticipantSaving(true);
+    setParticipantsError("");
+
+    try {
+      if (editingParticipantId !== null) {
+        const updatedParticipant = await updateParticipantInSupabase(editingParticipantId, {
           name: participantName.trim(),
-          winnerPick: participantPick,
-          points: 0,
-        },
-      ]);
-    }
+          selectedChampionTeam: participantPick,
+          status: participantStatus,
+        });
 
-    setParticipantName("");
-    setParticipantPick(firstTeamName);
+        setParticipants((current) =>
+          current.map((participant) =>
+            participant.id === editingParticipantId ? updatedParticipant : participant,
+          ),
+        );
+        setEditingParticipantId(null);
+      } else {
+        const newParticipant = await createParticipantInSupabase(
+          participantName.trim(),
+          participantPick,
+        );
+
+        setParticipants((current) => [...current, newParticipant]);
+      }
+
+      setParticipantName("");
+      setParticipantPick(firstTeamName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ui.databaseNotReady;
+      setParticipantsError(message);
+    } finally {
+      setParticipantSaving(false);
+    }
   }
 
   function editParticipant(participant: Participant) {
     setEditingParticipantId(participant.id);
     setParticipantName(participant.name);
-    setParticipantPick(participant.winnerPick);
+    setParticipantPick(participant.selectedChampionTeam);
   }
 
-  function deleteParticipant(id: number) {
-    setParticipants((current) => current.filter((participant) => participant.id !== id));
+  async function deleteParticipant(id: string) {
+    setParticipantsError("");
+
+    try {
+      await deleteParticipantFromSupabase(id);
+      setParticipants((current) => current.filter((participant) => participant.id !== id));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ui.databaseNotReady;
+      setParticipantsError(message);
+    }
   }
 
   function updateScore(event: FormEvent<HTMLFormElement>) {
@@ -1207,12 +1286,39 @@ function AdminPanel({
     );
   }
 
-  function markEliminated(teamName: string) {
+  async function markEliminated(teamName: string) {
+    setParticipantsError("");
+
     setTeams((current) =>
       current.map((team) =>
         team.name === teamName ? { ...team, status: "eliminated" } : team,
       ),
     );
+
+    const participantsToEliminate = participants.filter(
+      (participant) =>
+        participant.selectedChampionTeam === teamName && participant.status !== "eliminated",
+    );
+
+    if (participantsToEliminate.length === 0) return;
+
+    try {
+      const updatedParticipants = await Promise.all(
+        participantsToEliminate.map((participant) =>
+          updateParticipantInSupabase(participant.id, { status: "eliminated" }),
+        ),
+      );
+      const updatedById = new Map(
+        updatedParticipants.map((participant) => [participant.id, participant]),
+      );
+
+      setParticipants((current) =>
+        current.map((participant) => updatedById.get(participant.id) ?? participant),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ui.databaseNotReady;
+      setParticipantsError(message);
+    }
   }
 
   return (
@@ -1245,7 +1351,10 @@ function AdminPanel({
               ))}
             </select>
           </label>
-          <button type="submit" disabled={teams.length === 0}>{ui.saveParticipant}</button>
+          <button type="submit" disabled={teams.length === 0 || participantsLoading || participantSaving}>
+            {participantSaving ? ui.loading : ui.saveParticipant}
+          </button>
+          {participantsError ? <p className="error-text">{participantsError}</p> : null}
         </form>
 
         <form className="admin-card" onSubmit={updateScore}>
@@ -1295,7 +1404,7 @@ function AdminPanel({
               ))}
             </select>
           </label>
-          <button type="button" disabled={teams.length === 0} onClick={() => markEliminated(teamToEliminate)}>
+          <button type="button" disabled={teams.length === 0 || participantsLoading} onClick={() => void markEliminated(teamToEliminate)}>
             {ui.markEliminated}
           </button>
           <p className="rule-note">{ui.eliminationRule}</p>
@@ -1303,16 +1412,18 @@ function AdminPanel({
 
         <div className="admin-card audit-card">
           <h3>{ui.manageParticipants}</h3>
-          {participants.length === 0 ? (
+          {participantsLoading ? (
+            <p className="muted">{ui.participantsLoading}</p>
+          ) : participants.length === 0 ? (
             <p className="muted">{ui.noParticipants}</p>
           ) : (
             <ul>
               {participants.map((participant) => (
                 <li key={participant.id}>
-                  <span>{participant.name} · {participant.winnerPick}</span>
+                  <span>{participant.name} · {participant.selectedChampionTeam}</span>
                   <div className="inline-actions">
                     <button type="button" onClick={() => editParticipant(participant)}>{ui.edit}</button>
-                    <button type="button" onClick={() => deleteParticipant(participant.id)}>{ui.delete}</button>
+                    <button type="button" onClick={() => void deleteParticipant(participant.id)}>{ui.delete}</button>
                   </div>
                 </li>
               ))}

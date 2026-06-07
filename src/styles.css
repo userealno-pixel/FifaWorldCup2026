@@ -511,6 +511,12 @@ th {
   gap: 18px;
 }
 
+.live-sync-status {
+  display: flex;
+  justify-content: flex-start;
+  margin: -6px 0 12px;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;

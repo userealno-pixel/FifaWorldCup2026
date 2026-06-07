@@ -12,8 +12,10 @@ import {
   deleteParticipant,
   fetchParticipants,
   insertParticipant,
+  mapParticipantRow,
   supabase,
   updateParticipant,
+  type ParticipantRow,
   type StoredParticipant,
 } from "./services/supabase";
 import { TournamentBracket } from "./components/TournamentBracket";
@@ -129,6 +131,8 @@ const ui = {
   databaseNotReady: "Supabase עדיין לא מחובר. יש להגדיר VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY.",
   supabaseConnected: "Supabase מחובר",
   supabaseNotConnected: "Supabase לא מחובר",
+  realtimeActive: "עדכון חי פעיל",
+  realtimeInactive: "עדכון חי לא פעיל",
   supabaseLoadFailed: "טעינת המשתתפים מ-Supabase נכשלה.",
   supabaseSaveFailed: "שמירת המשתתף ב-Supabase נכשלה.",
   supabaseDeleteFailed: "מחיקת המשתתף מ-Supabase נכשלה.",
@@ -352,6 +356,27 @@ function translateApiMessage(message: string) {
   return message;
 }
 
+function sortParticipantsByCreatedAt(participants: Participant[]) {
+  return [...participants].sort(
+    (first, second) =>
+      new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
+  );
+}
+
+function upsertParticipant(current: Participant[], nextParticipant: Participant) {
+  const participantExists = current.some((participant) => participant.id === nextParticipant.id);
+
+  if (!participantExists) {
+    return sortParticipantsByCreatedAt([...current, nextParticipant]);
+  }
+
+  return sortParticipantsByCreatedAt(
+    current.map((participant) =>
+      participant.id === nextParticipant.id ? nextParticipant : participant,
+    ),
+  );
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<Tab>("schedule");
   const [teams, setTeams] = useState<Team[]>([]);
@@ -359,6 +384,7 @@ export function App() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(true);
   const [participantsError, setParticipantsError] = useState("");
+  const [participantsRealtimeActive, setParticipantsRealtimeActive] = useState(false);
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [apiStatus, setApiStatus] = useState<ApiFootballStatus>(
@@ -396,6 +422,65 @@ export function App() {
 
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) {
+      setParticipantsRealtimeActive(false);
+      return;
+    }
+
+    const realtimeClient = supabase;
+    const channel = realtimeClient
+      .channel("participants-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "participants" },
+        (payload) => {
+          const row = payload.new as ParticipantRow | null;
+          if (!row?.id) return;
+
+          setParticipants((current) =>
+            upsertParticipant(current, mapParticipantRow(row)),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "participants" },
+        (payload) => {
+          const row = payload.new as ParticipantRow | null;
+          if (!row?.id) return;
+
+          setParticipants((current) =>
+            upsertParticipant(current, mapParticipantRow(row)),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "participants" },
+        (payload) => {
+          const oldRow = payload.old as Partial<ParticipantRow> | null;
+          if (!oldRow?.id) return;
+
+          setParticipants((current) =>
+            current.filter((participant) => participant.id !== oldRow.id),
+          );
+        },
+      )
+      .subscribe((status) => {
+        setParticipantsRealtimeActive(status === "SUBSCRIBED");
+
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          console.error("Supabase participants realtime disconnected", { status });
+        }
+      });
+
+    return () => {
+      setParticipantsRealtimeActive(false);
+      realtimeClient.removeChannel(channel);
     };
   }, []);
 
@@ -526,6 +611,12 @@ export function App() {
           </button>
         ))}
       </nav>
+
+      <div className="live-sync-status" aria-live="polite">
+        <span className={`status-badge ${participantsRealtimeActive ? "active" : "eliminated"}`}>
+          {participantsRealtimeActive ? ui.realtimeActive : ui.realtimeInactive}
+        </span>
+      </div>
 
       {activeTab === "schedule" && (
         <MatchScheduleView
@@ -1244,7 +1335,7 @@ function AdminPanel({
           participantName.trim(),
           participantPick,
         );
-        setParticipants((current) => [...current, newParticipant]);
+        setParticipants((current) => upsertParticipant(current, newParticipant));
       }
 
       setParticipantName("");

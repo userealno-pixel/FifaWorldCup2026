@@ -11,7 +11,7 @@ export type StoredParticipant = {
   updatedAt: string;
 };
 
-type ParticipantRow = {
+export type ParticipantRow = {
   id: string;
   name: string;
   selected_champion_team: string;
@@ -44,7 +44,7 @@ function logSupabaseError(action: string, error: unknown) {
   console.error(`Supabase participants ${action} failed`, error);
 }
 
-function toStoredParticipant(row: ParticipantRow): StoredParticipant {
+export function mapParticipantRow(row: ParticipantRow): StoredParticipant {
   return {
     id: row.id,
     name: row.name,
@@ -66,7 +66,7 @@ export async function fetchParticipants() {
     throw error;
   }
 
-  return (data ?? []).map((row) => toStoredParticipant(row as ParticipantRow));
+  return (data ?? []).map((row) => mapParticipantRow(row as ParticipantRow));
 }
 
 export async function insertParticipant(name: string, selectedChampionTeam: string) {
@@ -89,7 +89,7 @@ export async function insertParticipant(name: string, selectedChampionTeam: stri
     throw error;
   }
 
-  return toStoredParticipant(data as ParticipantRow);
+  return mapParticipantRow(data as ParticipantRow);
 }
 
 export async function updateParticipant(
@@ -119,7 +119,7 @@ export async function updateParticipant(
     throw error;
   }
 
-  return toStoredParticipant(data as ParticipantRow);
+  return mapParticipantRow(data as ParticipantRow);
 }
 
 export async function deleteParticipant(id: string) {

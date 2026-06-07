@@ -32,10 +32,6 @@ export const supabase =
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
-export function isSupabaseConfigured() {
-  return Boolean(supabase);
-}
-
 function getSupabaseClient() {
   if (!supabase) {
     throw new Error("חיבור Supabase עדיין לא מוגדר. יש להוסיף VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY.");
@@ -85,7 +81,11 @@ export async function insertParticipant(name: string, selectedChampionTeam: stri
     .single();
 
   if (error) {
-    logSupabaseError("insert", error);
+    logSupabaseError("insert", {
+      error,
+      table: "participants",
+      payload: { name, selected_champion_team: selectedChampionTeam, status: "active" },
+    });
     throw error;
   }
 

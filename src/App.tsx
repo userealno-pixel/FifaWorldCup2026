@@ -12,7 +12,7 @@ import {
   deleteParticipant,
   fetchParticipants,
   insertParticipant,
-  isSupabaseConfigured,
+  supabase,
   updateParticipant,
   type StoredParticipant,
 } from "./services/supabase";
@@ -1333,8 +1333,8 @@ function AdminPanel({
           <p className="eyebrow">{ui.adminOnly}</p>
           <h2 id="admin-heading">{ui.adminPanel}</h2>
         </div>
-        <span className={`status-badge ${isSupabaseConfigured() ? "active" : "eliminated"}`}>
-          {isSupabaseConfigured() ? ui.supabaseConnected : ui.supabaseNotConnected}
+        <span className={`status-badge ${supabase ? "active" : "eliminated"}`}>
+          {supabase ? ui.supabaseConnected : ui.supabaseNotConnected}
         </span>
         <button className="secondary-button" type="button" onClick={() => setAdminLoggedIn(false)}>
           {ui.logout}

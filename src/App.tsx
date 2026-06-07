@@ -1457,6 +1457,23 @@ function AdminPanel({
     () => validateGroupStageData(teams, matches),
     [matches, teams],
   );
+  const managedTeams = useMemo(() => {
+    const teamByName = new Map(teams.map((team) => [team.name, team]));
+
+    participants.forEach((participant) => {
+      if (!teamByName.has(participant.selectedChampionTeam)) {
+        teamByName.set(participant.selectedChampionTeam, {
+          name: participant.selectedChampionTeam,
+          group: "TBD",
+          status: participant.status === "eliminated" ? "eliminated" : "active",
+        });
+      }
+    });
+
+    return Array.from(teamByName.values()).sort((first, second) =>
+      translateTeamName(first.name).localeCompare(translateTeamName(second.name), "he"),
+    );
+  }, [participants, teams]);
 
   useEffect(() => {
     if (!participantPick && firstTeamName) setParticipantPick(firstTeamName);
@@ -1676,6 +1693,38 @@ function AdminPanel({
       </section>
 
       <div className="admin-grid">
+        <div className="admin-card team-status-card">
+          <h3>{ui.teamStatusManagement}</h3>
+          {managedTeams.length === 0 ? (
+            <p className="empty-state">{ui.teamsUnavailable}</p>
+          ) : (
+            <ul className="team-status-list">
+              {managedTeams.map((team) => {
+                const isEliminated = team.status === "eliminated";
+
+                return (
+                  <li key={team.name}>
+                    <div>
+                      <strong>{translateTeamName(team.name)}</strong>
+                      <span className={`status-badge ${isEliminated ? "eliminated" : "active"}`}>
+                        {isEliminated ? ui.teamEliminated : ui.teamActive}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={participantsLoading}
+                      onClick={() => void (isEliminated ? restoreTeam(team.name) : markEliminated(team.name))}
+                    >
+                      {isEliminated ? ui.restoreTeam : ui.markEliminated}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="rule-note">{ui.eliminationRule}</p>
+        </div>
+
         <form className="admin-card" onSubmit={saveParticipant}>
           <h3>{editingParticipantId === null ? ui.addParticipant : ui.editParticipant}</h3>
           {teams.length === 0 ? (
@@ -1732,38 +1781,6 @@ function AdminPanel({
           </label>
           <button type="submit" disabled={matches.length === 0}>{ui.updateScore}</button>
         </form>
-
-        <div className="admin-card team-status-card">
-          <h3>{ui.teamStatusManagement}</h3>
-          {teams.length === 0 ? (
-            <p className="empty-state">{ui.teamsUnavailable}</p>
-          ) : (
-            <ul className="team-status-list">
-              {teams.map((team) => {
-                const isEliminated = team.status === "eliminated";
-
-                return (
-                  <li key={team.name}>
-                    <div>
-                      <strong>{translateTeamName(team.name)}</strong>
-                      <span className={`status-badge ${isEliminated ? "eliminated" : "active"}`}>
-                        {isEliminated ? ui.teamEliminated : ui.teamActive}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={participantsLoading}
-                      onClick={() => void (isEliminated ? restoreTeam(team.name) : markEliminated(team.name))}
-                    >
-                      {isEliminated ? ui.restoreTeam : ui.markEliminated}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p className="rule-note">{ui.eliminationRule}</p>
-        </div>
 
         <div className="admin-card audit-card">
           <h3>{ui.manageParticipants}</h3>

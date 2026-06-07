@@ -1062,6 +1062,12 @@ input {
   opacity: 0.52;
 }
 
+.team-status-card {
+  grid-column: 1 / -1;
+  border-color: #b8d8ff;
+  box-shadow: 0 14px 30px rgba(0, 88, 131, 0.08);
+}
+
 .team-status-list {
   display: grid;
   gap: 10px;
@@ -1080,6 +1086,12 @@ input {
   padding: 12px;
   background: #f5f7fb;
   border-radius: 8px;
+}
+
+@media (min-width: 900px) {
+  .team-status-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .team-status-list li > div {

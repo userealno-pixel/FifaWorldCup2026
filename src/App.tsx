@@ -472,6 +472,21 @@ export function App() {
   const nextRefreshInMs = apiStatus.nextRefreshAt
     ? new Date(apiStatus.nextRefreshAt).getTime() - now
     : 0;
+
+  async function refreshParticipantsFromDatabase() {
+    setParticipantsError("");
+
+    try {
+      const storedParticipants = await loadParticipantsFromSupabase();
+      setParticipants(storedParticipants);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ui.databaseNotReady;
+      setParticipants([]);
+      setParticipantsError(message);
+      throw error;
+    }
+  }
+
   function handleLogin(password: string) {
     if (password === ADMIN_PASSWORD) {
       setAdminLoggedIn(true);
@@ -553,12 +568,12 @@ export function App() {
           participants={participants}
           participantsError={participantsError}
           participantsLoading={participantsLoading}
+          refreshParticipants={refreshParticipantsFromDatabase}
           apiStatus={apiStatus}
           nextRefreshInMs={nextRefreshInMs}
           setAdminLoggedIn={setAdminLoggedIn}
           setParticipantsError={setParticipantsError}
           setMatches={setMatches}
-          setParticipants={setParticipants}
           setTeams={setTeams}
           teams={teams}
         />
@@ -1128,9 +1143,9 @@ function AdminPanel({
   participants,
   participantsError,
   participantsLoading,
+  refreshParticipants,
   setAdminLoggedIn,
   setMatches,
-  setParticipants,
   setParticipantsError,
   setTeams,
   teams,
@@ -1144,9 +1159,9 @@ function AdminPanel({
   participants: Participant[];
   participantsError: string;
   participantsLoading: boolean;
+  refreshParticipants: () => Promise<void>;
   setAdminLoggedIn: (value: boolean) => void;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
-  setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
   setParticipantsError: React.Dispatch<React.SetStateAction<string>>;
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
   teams: Team[];
@@ -1221,27 +1236,20 @@ function AdminPanel({
 
     try {
       if (editingParticipantId !== null) {
-        const updatedParticipant = await updateParticipantInSupabase(editingParticipantId, {
+        await updateParticipantInSupabase(editingParticipantId, {
           name: participantName.trim(),
           selectedChampionTeam: participantPick,
           status: participantStatus,
         });
-
-        setParticipants((current) =>
-          current.map((participant) =>
-            participant.id === editingParticipantId ? updatedParticipant : participant,
-          ),
-        );
         setEditingParticipantId(null);
       } else {
-        const newParticipant = await createParticipantInSupabase(
+        await createParticipantInSupabase(
           participantName.trim(),
           participantPick,
         );
-
-        setParticipants((current) => [...current, newParticipant]);
       }
 
+      await refreshParticipants();
       setParticipantName("");
       setParticipantPick(firstTeamName);
     } catch (error) {
@@ -1263,7 +1271,7 @@ function AdminPanel({
 
     try {
       await deleteParticipantFromSupabase(id);
-      setParticipants((current) => current.filter((participant) => participant.id !== id));
+      await refreshParticipants();
     } catch (error) {
       const message = error instanceof Error ? error.message : ui.databaseNotReady;
       setParticipantsError(message);
@@ -1303,18 +1311,12 @@ function AdminPanel({
     if (participantsToEliminate.length === 0) return;
 
     try {
-      const updatedParticipants = await Promise.all(
+      await Promise.all(
         participantsToEliminate.map((participant) =>
           updateParticipantInSupabase(participant.id, { status: "eliminated" }),
         ),
       );
-      const updatedById = new Map(
-        updatedParticipants.map((participant) => [participant.id, participant]),
-      );
-
-      setParticipants((current) =>
-        current.map((participant) => updatedById.get(participant.id) ?? participant),
-      );
+      await refreshParticipants();
     } catch (error) {
       const message = error instanceof Error ? error.message : ui.databaseNotReady;
       setParticipantsError(message);

@@ -131,8 +131,8 @@ const ui = {
   databaseNotReady: "Supabase עדיין לא מחובר. יש להגדיר VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY.",
   supabaseConnected: "Supabase מחובר",
   supabaseNotConnected: "Supabase לא מחובר",
-  realtimeActive: "עדכון חי פעיל",
-  realtimeInactive: "עדכון חי לא פעיל",
+  realtimeActive: "סנכרון חי פעיל",
+  realtimeInactive: "סנכרון חי לא פעיל",
   supabaseLoadFailed: "טעינת המשתתפים מ-Supabase נכשלה.",
   supabaseSaveFailed: "שמירת המשתתף ב-Supabase נכשלה.",
   supabaseDeleteFailed: "מחיקת המשתתף מ-Supabase נכשלה.",
@@ -431,44 +431,45 @@ export function App() {
       return;
     }
 
+    function handleRealtimeInsertOrUpdate(payload: { new: unknown }) {
+      console.log("Supabase participants realtime payload", payload);
+
+      const row = payload.new as ParticipantRow | null;
+      if (!row?.id) return;
+
+      setParticipants((current) =>
+        upsertParticipant(current, mapParticipantRow(row)),
+      );
+    }
+
+    function handleRealtimeDelete(payload: { old: unknown }) {
+      console.log("Supabase participants realtime payload", payload);
+
+      const oldRow = payload.old as Partial<ParticipantRow> | null;
+      if (!oldRow?.id) return;
+
+      setParticipants((current) =>
+        current.filter((participant) => participant.id !== oldRow.id),
+      );
+    }
+
     const realtimeClient = supabase;
     const channel = realtimeClient
       .channel("participants-realtime")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "participants" },
-        (payload) => {
-          const row = payload.new as ParticipantRow | null;
-          if (!row?.id) return;
-
-          setParticipants((current) =>
-            upsertParticipant(current, mapParticipantRow(row)),
-          );
-        },
+        handleRealtimeInsertOrUpdate,
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "participants" },
-        (payload) => {
-          const row = payload.new as ParticipantRow | null;
-          if (!row?.id) return;
-
-          setParticipants((current) =>
-            upsertParticipant(current, mapParticipantRow(row)),
-          );
-        },
+        handleRealtimeInsertOrUpdate,
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "participants" },
-        (payload) => {
-          const oldRow = payload.old as Partial<ParticipantRow> | null;
-          if (!oldRow?.id) return;
-
-          setParticipants((current) =>
-            current.filter((participant) => participant.id !== oldRow.id),
-          );
-        },
+        handleRealtimeDelete,
       )
       .subscribe((status) => {
         setParticipantsRealtimeActive(status === "SUBSCRIBED");
@@ -481,6 +482,29 @@ export function App() {
     return () => {
       setParticipantsRealtimeActive(false);
       realtimeClient.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    let isMounted = true;
+
+    async function syncParticipantsFromSupabase() {
+      try {
+        const storedParticipants = await fetchParticipants();
+        if (!isMounted) return;
+        setParticipants(sortParticipantsByCreatedAt(storedParticipants));
+      } catch (error) {
+        console.error("Supabase participants fallback sync failed", error);
+      }
+    }
+
+    const intervalId = window.setInterval(syncParticipantsFromSupabase, 5_000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
     };
   }, []);
 
@@ -563,6 +587,7 @@ export function App() {
   const nextRefreshInMs = apiStatus.nextRefreshAt
     ? new Date(apiStatus.nextRefreshAt).getTime() - now
     : 0;
+  const participantsSyncActive = Boolean(supabase) || participantsRealtimeActive;
 
   function handleLogin(password: string) {
     if (password === ADMIN_PASSWORD) {
@@ -612,12 +637,6 @@ export function App() {
         ))}
       </nav>
 
-      <div className="live-sync-status" aria-live="polite">
-        <span className={`status-badge ${participantsRealtimeActive ? "active" : "eliminated"}`}>
-          {participantsRealtimeActive ? ui.realtimeActive : ui.realtimeInactive}
-        </span>
-      </div>
-
       {activeTab === "schedule" && (
         <MatchScheduleView
           apiStatus={apiStatus}
@@ -651,6 +670,7 @@ export function App() {
           participants={participants}
           participantsError={participantsError}
           participantsLoading={participantsLoading}
+          participantsRealtimeActive={participantsSyncActive}
           apiStatus={apiStatus}
           nextRefreshInMs={nextRefreshInMs}
           setAdminLoggedIn={setAdminLoggedIn}
@@ -1226,6 +1246,7 @@ function AdminPanel({
   participants,
   participantsError,
   participantsLoading,
+  participantsRealtimeActive,
   setAdminLoggedIn,
   setMatches,
   setParticipants,
@@ -1242,6 +1263,7 @@ function AdminPanel({
   participants: Participant[];
   participantsError: string;
   participantsLoading: boolean;
+  participantsRealtimeActive: boolean;
   setAdminLoggedIn: (value: boolean) => void;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
   setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
@@ -1426,6 +1448,9 @@ function AdminPanel({
         </div>
         <span className={`status-badge ${supabase ? "active" : "eliminated"}`}>
           {supabase ? ui.supabaseConnected : ui.supabaseNotConnected}
+        </span>
+        <span className={`status-badge ${participantsRealtimeActive ? "active" : "eliminated"}`}>
+          {participantsRealtimeActive ? ui.realtimeActive : ui.realtimeInactive}
         </span>
         <button className="secondary-button" type="button" onClick={() => setAdminLoggedIn(false)}>
           {ui.logout}

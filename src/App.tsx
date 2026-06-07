@@ -9,12 +9,13 @@ import {
   type AppTeam,
 } from "./services/apiFootball";
 import {
-  createParticipantInSupabase,
-  deleteParticipantFromSupabase,
-  loadParticipantsFromSupabase,
-  updateParticipantInSupabase,
+  deleteParticipant,
+  fetchParticipants,
+  insertParticipant,
+  isSupabaseConfigured,
+  updateParticipant,
   type StoredParticipant,
-} from "./services/supabaseParticipants";
+} from "./services/supabase";
 import { TournamentBracket } from "./components/TournamentBracket";
 
 type Tab =
@@ -126,6 +127,11 @@ const ui = {
   participantsLoading: "טוען משתתפים...",
   databaseError: "שגיאת חיבור למסד הנתונים",
   databaseNotReady: "Supabase עדיין לא מחובר. יש להגדיר VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY.",
+  supabaseConnected: "Supabase מחובר",
+  supabaseNotConnected: "Supabase לא מחובר",
+  supabaseLoadFailed: "טעינת המשתתפים מ-Supabase נכשלה.",
+  supabaseSaveFailed: "שמירת המשתתף ב-Supabase נכשלה.",
+  supabaseDeleteFailed: "מחיקת המשתתף מ-Supabase נכשלה.",
   name: "שם",
   winnerPick: "בחירת זוכה",
   status: "סטטוס",
@@ -373,14 +379,14 @@ export function App() {
       setParticipantsError("");
 
       try {
-        const storedParticipants = await loadParticipantsFromSupabase();
+        const storedParticipants = await fetchParticipants();
         if (!isMounted) return;
         setParticipants(storedParticipants);
       } catch (error) {
         if (!isMounted) return;
         const message = error instanceof Error ? error.message : ui.databaseNotReady;
         setParticipants([]);
-        setParticipantsError(message);
+        setParticipantsError(`${ui.supabaseLoadFailed} ${message}`);
       } finally {
         if (isMounted) setParticipantsLoading(false);
       }
@@ -473,20 +479,6 @@ export function App() {
     ? new Date(apiStatus.nextRefreshAt).getTime() - now
     : 0;
 
-  async function refreshParticipantsFromDatabase() {
-    setParticipantsError("");
-
-    try {
-      const storedParticipants = await loadParticipantsFromSupabase();
-      setParticipants(storedParticipants);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : ui.databaseNotReady;
-      setParticipants([]);
-      setParticipantsError(message);
-      throw error;
-    }
-  }
-
   function handleLogin(password: string) {
     if (password === ADMIN_PASSWORD) {
       setAdminLoggedIn(true);
@@ -568,12 +560,12 @@ export function App() {
           participants={participants}
           participantsError={participantsError}
           participantsLoading={participantsLoading}
-          refreshParticipants={refreshParticipantsFromDatabase}
           apiStatus={apiStatus}
           nextRefreshInMs={nextRefreshInMs}
           setAdminLoggedIn={setAdminLoggedIn}
           setParticipantsError={setParticipantsError}
           setMatches={setMatches}
+          setParticipants={setParticipants}
           setTeams={setTeams}
           teams={teams}
         />
@@ -1143,9 +1135,9 @@ function AdminPanel({
   participants,
   participantsError,
   participantsLoading,
-  refreshParticipants,
   setAdminLoggedIn,
   setMatches,
+  setParticipants,
   setParticipantsError,
   setTeams,
   teams,
@@ -1159,9 +1151,9 @@ function AdminPanel({
   participants: Participant[];
   participantsError: string;
   participantsLoading: boolean;
-  refreshParticipants: () => Promise<void>;
   setAdminLoggedIn: (value: boolean) => void;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
+  setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
   setParticipantsError: React.Dispatch<React.SetStateAction<string>>;
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
   teams: Team[];
@@ -1236,25 +1228,30 @@ function AdminPanel({
 
     try {
       if (editingParticipantId !== null) {
-        await updateParticipantInSupabase(editingParticipantId, {
+        const updatedParticipant = await updateParticipant(editingParticipantId, {
           name: participantName.trim(),
           selectedChampionTeam: participantPick,
           status: participantStatus,
         });
+        setParticipants((current) =>
+          current.map((participant) =>
+            participant.id === editingParticipantId ? updatedParticipant : participant,
+          ),
+        );
         setEditingParticipantId(null);
       } else {
-        await createParticipantInSupabase(
+        const newParticipant = await insertParticipant(
           participantName.trim(),
           participantPick,
         );
+        setParticipants((current) => [...current, newParticipant]);
       }
 
-      await refreshParticipants();
       setParticipantName("");
       setParticipantPick(firstTeamName);
     } catch (error) {
       const message = error instanceof Error ? error.message : ui.databaseNotReady;
-      setParticipantsError(message);
+      setParticipantsError(`${ui.supabaseSaveFailed} ${message}`);
     } finally {
       setParticipantSaving(false);
     }
@@ -1266,15 +1263,15 @@ function AdminPanel({
     setParticipantPick(participant.selectedChampionTeam);
   }
 
-  async function deleteParticipant(id: string) {
+  async function removeParticipant(id: string) {
     setParticipantsError("");
 
     try {
-      await deleteParticipantFromSupabase(id);
-      await refreshParticipants();
+      await deleteParticipant(id);
+      setParticipants((current) => current.filter((participant) => participant.id !== id));
     } catch (error) {
       const message = error instanceof Error ? error.message : ui.databaseNotReady;
-      setParticipantsError(message);
+      setParticipantsError(`${ui.supabaseDeleteFailed} ${message}`);
     }
   }
 
@@ -1311,15 +1308,21 @@ function AdminPanel({
     if (participantsToEliminate.length === 0) return;
 
     try {
-      await Promise.all(
+      const updatedParticipants = await Promise.all(
         participantsToEliminate.map((participant) =>
-          updateParticipantInSupabase(participant.id, { status: "eliminated" }),
+          updateParticipant(participant.id, { status: "eliminated" }),
         ),
       );
-      await refreshParticipants();
+      const updatedById = new Map(
+        updatedParticipants.map((participant) => [participant.id, participant]),
+      );
+
+      setParticipants((current) =>
+        current.map((participant) => updatedById.get(participant.id) ?? participant),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : ui.databaseNotReady;
-      setParticipantsError(message);
+      setParticipantsError(`${ui.supabaseSaveFailed} ${message}`);
     }
   }
 
@@ -1330,6 +1333,9 @@ function AdminPanel({
           <p className="eyebrow">{ui.adminOnly}</p>
           <h2 id="admin-heading">{ui.adminPanel}</h2>
         </div>
+        <span className={`status-badge ${isSupabaseConfigured() ? "active" : "eliminated"}`}>
+          {isSupabaseConfigured() ? ui.supabaseConnected : ui.supabaseNotConnected}
+        </span>
         <button className="secondary-button" type="button" onClick={() => setAdminLoggedIn(false)}>
           {ui.logout}
         </button>
@@ -1425,7 +1431,7 @@ function AdminPanel({
                   <span>{participant.name} · {participant.selectedChampionTeam}</span>
                   <div className="inline-actions">
                     <button type="button" onClick={() => editParticipant(participant)}>{ui.edit}</button>
-                    <button type="button" onClick={() => void deleteParticipant(participant.id)}>{ui.delete}</button>
+                    <button type="button" onClick={() => void removeParticipant(participant.id)}>{ui.delete}</button>
                   </div>
                 </li>
               ))}

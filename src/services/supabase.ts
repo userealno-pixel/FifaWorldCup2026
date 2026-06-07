@@ -22,6 +22,7 @@ type ParticipantRow = {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.trim();
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+const PARTICIPANTS_SELECT = "id,name,selected_champion_team,status,created_at,updated_at";
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -41,6 +42,10 @@ function getSupabaseClient() {
   return supabaseClient;
 }
 
+function logSupabaseError(action: string, error: unknown) {
+  console.error(`Supabase participants ${action} failed`, error);
+}
+
 function toStoredParticipant(row: ParticipantRow): StoredParticipant {
   return {
     id: row.id,
@@ -52,18 +57,21 @@ function toStoredParticipant(row: ParticipantRow): StoredParticipant {
   };
 }
 
-export async function loadParticipantsFromSupabase() {
+export async function fetchParticipants() {
   const { data, error } = await getSupabaseClient()
     .from("participants")
-    .select("id,name,selected_champion_team,status,created_at,updated_at")
+    .select(PARTICIPANTS_SELECT)
     .order("created_at", { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    logSupabaseError("fetch", error);
+    throw error;
+  }
 
   return (data ?? []).map((row) => toStoredParticipant(row as ParticipantRow));
 }
 
-export async function createParticipantInSupabase(name: string, selectedChampionTeam: string) {
+export async function insertParticipant(name: string, selectedChampionTeam: string) {
   const { data, error } = await getSupabaseClient()
     .from("participants")
     .insert({
@@ -71,15 +79,18 @@ export async function createParticipantInSupabase(name: string, selectedChampion
       selected_champion_team: selectedChampionTeam,
       status: "active",
     })
-    .select("id,name,selected_champion_team,status,created_at,updated_at")
+    .select(PARTICIPANTS_SELECT)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    logSupabaseError("insert", error);
+    throw error;
+  }
 
   return toStoredParticipant(data as ParticipantRow);
 }
 
-export async function updateParticipantInSupabase(
+export async function updateParticipant(
   id: string,
   updates: {
     name?: string;
@@ -98,19 +109,25 @@ export async function updateParticipantInSupabase(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .select("id,name,selected_champion_team,status,created_at,updated_at")
+    .select(PARTICIPANTS_SELECT)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    logSupabaseError("update", error);
+    throw error;
+  }
 
   return toStoredParticipant(data as ParticipantRow);
 }
 
-export async function deleteParticipantFromSupabase(id: string) {
+export async function deleteParticipant(id: string) {
   const { error } = await getSupabaseClient()
     .from("participants")
     .delete()
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) {
+    logSupabaseError("delete", error);
+    throw error;
+  }
 }

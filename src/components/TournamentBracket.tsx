@@ -1,4 +1,5 @@
 import type { AppMatch, AppTeam } from "../services/apiFootball";
+import { translateTeamName } from "../utils/teamTranslations";
 import { BracketMatchCard, type BracketMatch, type BracketRound, type BracketTeam } from "./BracketMatchCard";
 
 type BracketRoundConfig = {
@@ -127,7 +128,7 @@ export function TournamentBracket({
                       ) : (
                         <span>{team.flag}</span>
                       )}
-                      {team.name}
+                      {translateTeamName(team.name)}
                     </li>
                   ))}
                 </ul>
@@ -152,7 +153,7 @@ export function TournamentBracket({
                 <span aria-hidden="true">🏆</span>
                 <strong>הזוכה במונדיאל 2026</strong>
                 <p>
-                  {champion.flag} {champion.name}
+                  {champion.flag} {translateTeamName(champion.name)}
                 </p>
               </article>
             </section>

@@ -1,4 +1,5 @@
 import type { AppMatchStatus } from "../services/apiFootball";
+import { translateTeamName } from "../utils/teamTranslations";
 
 export type BracketTeam = {
   flag: string;
@@ -55,7 +56,7 @@ function TeamRow({ team }: { team: BracketTeam }) {
           {team.flag}
         </span>
       )}
-      <span className="team-name">{team.name}</span>
+      <span className="team-name">{translateTeamName(team.name)}</span>
       <b>{team.score ?? "-"}</b>
     </div>
   );

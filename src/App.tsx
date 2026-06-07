@@ -19,6 +19,7 @@ import {
   type StoredParticipant,
 } from "./services/supabase";
 import { TournamentBracket } from "./components/TournamentBracket";
+import { translateTeamName } from "./utils/teamTranslations";
 
 type Tab =
   | "schedule"
@@ -34,6 +35,11 @@ type MatchStatus = AppMatchStatus;
 
 type Participant = StoredParticipant;
 type ParticipantsSyncStatus = "idle" | "syncing" | "active" | "error";
+
+type AutomaticEliminationState = {
+  count: number;
+  lastCheckedAt: string | null;
+};
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? "123456";
 
@@ -140,6 +146,10 @@ const ui = {
   syncActive: "סנכרון פעיל",
   syncLoading: "מסנכרן",
   syncError: "שגיאת סנכרון",
+  eliminatedTeamsList: "נבחרות שהודחו",
+  noEliminatedTeams: "אין נבחרות שהודחו עדיין",
+  lastAutomaticEliminationCheck: "בדיקת הדחות אוטומטית אחרונה",
+  automaticParticipantsEliminated: "משתתפים שהודחו אוטומטית",
   supabaseLoadFailed: "טעינת המשתתפים מ-Supabase נכשלה.",
   supabaseSaveFailed: "שמירת המשתתף ב-Supabase נכשלה.",
   supabaseDeleteFailed: "מחיקת המשתתף מ-Supabase נכשלה.",
@@ -254,7 +264,7 @@ function formatScore(match: Match) {
 }
 
 function getMatchLabel(match: Match) {
-  return `${match.home} vs ${match.away}`;
+  return `${translateTeamName(match.home)} נגד ${translateTeamName(match.away)}`;
 }
 
 function getTeamFlag(teamName: string) {
@@ -384,6 +394,27 @@ function upsertParticipant(current: Participant[], nextParticipant: Participant)
   );
 }
 
+function getFinishedKnockoutLosers(matches: Match[]) {
+  return matches
+    .filter((match) => match.stage === "knockout" && match.status === "final")
+    .map((match) => {
+      const loser = getMatchLoser(match);
+      return loser ? { matchId: match.id, teamName: loser } : null;
+    })
+    .filter((item): item is { matchId: number; teamName: string } => item !== null);
+}
+
+function getMatchLoser(match: Match) {
+  if (match.homeWinner === true) return match.away;
+  if (match.awayWinner === true) return match.home;
+
+  if (match.homeScore === null || match.awayScore === null || match.homeScore === match.awayScore) {
+    return null;
+  }
+
+  return match.homeScore < match.awayScore ? match.home : match.away;
+}
+
 function translateParticipantsSyncStatus(status: ParticipantsSyncStatus) {
   if (status === "syncing") return ui.syncLoading;
   if (status === "error") return ui.syncError;
@@ -402,6 +433,12 @@ export function App() {
   const [participantsLastSyncedAt, setParticipantsLastSyncedAt] = useState<string | null>(null);
   const [participantsLoadedCount, setParticipantsLoadedCount] = useState(0);
   const [participantsSyncStatus, setParticipantsSyncStatus] = useState<ParticipantsSyncStatus>("idle");
+  const [eliminatedTeamNames, setEliminatedTeamNames] = useState<string[]>([]);
+  const [automaticEliminatedTeamNames, setAutomaticEliminatedTeamNames] = useState<string[]>([]);
+  const [automaticElimination, setAutomaticElimination] = useState<AutomaticEliminationState>({
+    count: 0,
+    lastCheckedAt: null,
+  });
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [apiStatus, setApiStatus] = useState<ApiFootballStatus>(
@@ -577,6 +614,84 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const finishedKnockoutLosers = getFinishedKnockoutLosers(matches);
+
+    if (finishedKnockoutLosers.length === 0) {
+      setAutomaticElimination((current) => ({
+        ...current,
+        lastCheckedAt: new Date().toISOString(),
+      }));
+      return;
+    }
+
+    const loserTeamNames = Array.from(new Set(finishedKnockoutLosers.map((item) => item.teamName)));
+
+    setAutomaticElimination((current) => ({
+      ...current,
+      lastCheckedAt: new Date().toISOString(),
+    }));
+    setEliminatedTeamNames((current) =>
+      Array.from(new Set([...current, ...loserTeamNames])).sort((first, second) =>
+        first.localeCompare(second),
+      ),
+    );
+    setAutomaticEliminatedTeamNames((current) =>
+      Array.from(new Set([...current, ...loserTeamNames])).sort((first, second) =>
+        first.localeCompare(second),
+      ),
+    );
+    setTeams((current) =>
+      current.map((team) =>
+        loserTeamNames.includes(team.name) ? { ...team, status: "eliminated" } : team,
+      ),
+    );
+  }, [matches]);
+
+  useEffect(() => {
+    if (automaticEliminatedTeamNames.length === 0 || participants.length === 0) return;
+
+    let isCancelled = false;
+    const eliminatedTeamSet = new Set(automaticEliminatedTeamNames);
+    const participantsToEliminate = participants.filter(
+      (participant) =>
+        participant.status !== "eliminated" &&
+        eliminatedTeamSet.has(participant.selectedChampionTeam),
+    );
+
+    if (participantsToEliminate.length === 0) return;
+
+    async function eliminateParticipantsAutomatically() {
+      try {
+        await Promise.all(
+          participantsToEliminate.map((participant) =>
+            updateParticipant(participant.id, { status: "eliminated" }),
+          ),
+        );
+
+        if (isCancelled) return;
+
+        setAutomaticElimination((current) => ({
+          count: current.count + participantsToEliminate.length,
+          lastCheckedAt: new Date().toISOString(),
+        }));
+        await reloadParticipantsFromSupabase();
+      } catch (error) {
+        console.error("Automatic participant elimination failed", {
+          error,
+          eliminatedTeamNames: automaticEliminatedTeamNames,
+          participantsToEliminate,
+        });
+      }
+    }
+
+    void eliminateParticipantsAutomatically();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [automaticEliminatedTeamNames, participants, reloadParticipantsFromSupabase]);
+
+  useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
 
     return () => window.clearInterval(intervalId);
@@ -690,10 +805,13 @@ export function App() {
           participantsLoading={participantsLoading}
           participantsRealtimeActive={participantsSyncActive}
           participantsSyncStatus={participantsSyncStatus}
+          automaticElimination={automaticElimination}
+          eliminatedTeamNames={eliminatedTeamNames}
           apiStatus={apiStatus}
           nextRefreshInMs={nextRefreshInMs}
           reloadParticipantsFromSupabase={reloadParticipantsFromSupabase}
           setAdminLoggedIn={setAdminLoggedIn}
+          setEliminatedTeamNames={setEliminatedTeamNames}
           setParticipantsError={setParticipantsError}
           setMatches={setMatches}
           setTeams={setTeams}
@@ -860,7 +978,7 @@ function TeamIdentity({
       ) : (
         <span className="emoji-flag" aria-hidden="true">{getTeamFlag(name)}</span>
       )}
-      <strong>{name}</strong>
+      <strong>{translateTeamName(name)}</strong>
     </span>
   );
 }
@@ -1025,7 +1143,7 @@ function KnockoutStageView({
                       {formatMatchDateTime(match)} · {ui.localTime} · {translateStatusText(match.statusText)}
                     </p>
                     <p className="muted">
-                      {ui.advances}: {getAdvancingTeam(match) ?? ui.tbd}
+                      {ui.advances}: {getAdvancingTeam(match) ? translateTeamName(getAdvancingTeam(match)!) : ui.tbd}
                     </p>
                   </article>
                 ))}
@@ -1132,7 +1250,7 @@ function validateGroupStageData(teams: Team[], matches: Match[]) {
 
   teamGroups.forEach((groups, teamName) => {
     if (groups.size > 1) {
-      warnings.push(`${ui.duplicateTeamGroupWarning}: ${teamName} (${Array.from(groups).join(", ")})`);
+      warnings.push(`${ui.duplicateTeamGroupWarning}: ${translateTeamName(teamName)} (${Array.from(groups).join(", ")})`);
     }
   });
 
@@ -1243,7 +1361,7 @@ function ParticipantSection({
               {participants.map((participant) => (
                 <tr key={participant.id}>
                   <td>{participant.name}</td>
-                  <td>{participant.selectedChampionTeam}</td>
+                  <td>{translateTeamName(participant.selectedChampionTeam)}</td>
                   <td>{statusLabel}</td>
                 </tr>
               ))}
@@ -1258,6 +1376,8 @@ function ParticipantSection({
 function AdminPanel({
   apiStatus,
   adminLoggedIn,
+  automaticElimination,
+  eliminatedTeamNames,
   loginError,
   matches,
   nextRefreshInMs,
@@ -1271,6 +1391,7 @@ function AdminPanel({
   participantsSyncStatus,
   reloadParticipantsFromSupabase,
   setAdminLoggedIn,
+  setEliminatedTeamNames,
   setMatches,
   setParticipantsError,
   setTeams,
@@ -1278,6 +1399,8 @@ function AdminPanel({
 }: {
   apiStatus: ApiFootballStatus;
   adminLoggedIn: boolean;
+  automaticElimination: AutomaticEliminationState;
+  eliminatedTeamNames: string[];
   loginError: string;
   matches: Match[];
   nextRefreshInMs: number;
@@ -1291,6 +1414,7 @@ function AdminPanel({
   participantsSyncStatus: ParticipantsSyncStatus;
   reloadParticipantsFromSupabase: () => Promise<void>;
   setAdminLoggedIn: (value: boolean) => void;
+  setEliminatedTeamNames: React.Dispatch<React.SetStateAction<string[]>>;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
   setParticipantsError: React.Dispatch<React.SetStateAction<string>>;
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
@@ -1432,6 +1556,11 @@ function AdminPanel({
         team.name === teamName ? { ...team, status: "eliminated" } : team,
       ),
     );
+    setEliminatedTeamNames((current) =>
+      Array.from(new Set([...current, teamName])).sort((first, second) =>
+        first.localeCompare(second),
+      ),
+    );
 
     const participantsToEliminate = participants.filter(
       (participant) =>
@@ -1477,6 +1606,17 @@ function AdminPanel({
           {ui.lastParticipantsSync}: {participantsLastSyncedAt ? formatDateTime(participantsLastSyncedAt) : ui.pending}
         </span>
         <span>{ui.participantsLoadedCount}: {participantsLoadedCount}</span>
+        <span>
+          {ui.lastAutomaticEliminationCheck}:{" "}
+          {automaticElimination.lastCheckedAt ? formatDateTime(automaticElimination.lastCheckedAt) : ui.pending}
+        </span>
+        <span>{ui.automaticParticipantsEliminated}: {automaticElimination.count}</span>
+        <span>
+          {ui.eliminatedTeamsList}:{" "}
+          {eliminatedTeamNames.length > 0
+            ? eliminatedTeamNames.map(translateTeamName).join(", ")
+            : ui.noEliminatedTeams}
+        </span>
       </section>
 
       <div className="admin-grid">
@@ -1493,7 +1633,7 @@ function AdminPanel({
             {ui.winnerPick}
             <select value={participantPick} onChange={(event) => setParticipantPick(event.target.value)}>
               {teams.map((team) => (
-                <option key={team.name}>{team.name}</option>
+                <option key={team.name} value={team.name}>{translateTeamName(team.name)}</option>
               ))}
             </select>
           </label>
@@ -1546,7 +1686,7 @@ function AdminPanel({
             {ui.team}
             <select value={teamToEliminate} onChange={(event) => setTeamToEliminate(event.target.value)}>
               {teams.map((team) => (
-                <option key={team.name}>{team.name}</option>
+                <option key={team.name} value={team.name}>{translateTeamName(team.name)}</option>
               ))}
             </select>
           </label>
@@ -1566,7 +1706,7 @@ function AdminPanel({
             <ul>
               {participants.map((participant) => (
                 <li key={participant.id}>
-                  <span>{participant.name} · {participant.selectedChampionTeam}</span>
+                  <span>{participant.name} · {translateTeamName(participant.selectedChampionTeam)}</span>
                   <div className="inline-actions">
                     <button type="button" onClick={() => editParticipant(participant)}>{ui.edit}</button>
                     <button type="button" onClick={() => void removeParticipant(participant.id)}>{ui.delete}</button>

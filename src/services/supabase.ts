@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 export type ParticipantStatus = "active" | "eliminated";
 
@@ -20,26 +20,28 @@ type ParticipantRow = {
   updated_at: string;
 };
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.trim();
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PARTICIPANTS_SELECT = "id,name,selected_champion_team,status,created_at,updated_at";
 
-let supabaseClient: SupabaseClient | null = null;
+console.log("SUPABASE URL:", import.meta.env.VITE_SUPABASE_URL);
+console.log("SUPABASE KEY EXISTS:", !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+
+export const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 export function isSupabaseConfigured() {
-  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  return Boolean(supabase);
 }
 
 function getSupabaseClient() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  if (!supabase) {
     throw new Error("חיבור Supabase עדיין לא מוגדר. יש להוסיף VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY.");
   }
 
-  if (!supabaseClient) {
-    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-
-  return supabaseClient;
+  return supabase;
 }
 
 function logSupabaseError(action: string, error: unknown) {

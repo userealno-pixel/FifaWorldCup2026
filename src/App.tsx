@@ -175,6 +175,12 @@ const ui = {
   updateScore: "עדכון תוצאה",
   eliminateTeam: "סימון נבחרת כהודחה",
   markEliminated: "סמן כהודחה",
+  restoreTeam: "החזר לטורניר",
+  teamStatusManagement: "ניהול סטטוס נבחרות",
+  teamActive: "פעילה",
+  teamEliminated: "הודחה",
+  confirmEliminateTeam: "בטוח שברצונך לסמן את הנבחרת כהודחה?",
+  confirmRestoreTeam: "בטוח שברצונך להחזיר את הנבחרת לטורניר?",
   eliminationRule: "משתתפים שבחרו בנבחרת זו יועברו אוטומטית להדחה.",
   manageParticipants: "ניהול משתתפים",
   edit: "עריכה",
@@ -435,6 +441,7 @@ export function App() {
   const [participantsSyncStatus, setParticipantsSyncStatus] = useState<ParticipantsSyncStatus>("idle");
   const [eliminatedTeamNames, setEliminatedTeamNames] = useState<string[]>([]);
   const [automaticEliminatedTeamNames, setAutomaticEliminatedTeamNames] = useState<string[]>([]);
+  const [restoredTeamNames, setRestoredTeamNames] = useState<string[]>([]);
   const [automaticElimination, setAutomaticElimination] = useState<AutomaticEliminationState>({
     count: 0,
     lastCheckedAt: null,
@@ -624,7 +631,16 @@ export function App() {
       return;
     }
 
-    const loserTeamNames = Array.from(new Set(finishedKnockoutLosers.map((item) => item.teamName)));
+    const restoredTeamSet = new Set(restoredTeamNames);
+    const loserTeamNames = Array.from(
+      new Set(
+        finishedKnockoutLosers
+          .map((item) => item.teamName)
+          .filter((teamName) => !restoredTeamSet.has(teamName)),
+      ),
+    );
+
+    if (loserTeamNames.length === 0) return;
 
     setAutomaticElimination((current) => ({
       ...current,
@@ -645,7 +661,7 @@ export function App() {
         loserTeamNames.includes(team.name) ? { ...team, status: "eliminated" } : team,
       ),
     );
-  }, [matches]);
+  }, [matches, restoredTeamNames]);
 
   useEffect(() => {
     if (automaticEliminatedTeamNames.length === 0 || participants.length === 0) return;
@@ -811,8 +827,10 @@ export function App() {
           nextRefreshInMs={nextRefreshInMs}
           reloadParticipantsFromSupabase={reloadParticipantsFromSupabase}
           setAdminLoggedIn={setAdminLoggedIn}
+          setAutomaticEliminatedTeamNames={setAutomaticEliminatedTeamNames}
           setEliminatedTeamNames={setEliminatedTeamNames}
           setParticipantsError={setParticipantsError}
+          setRestoredTeamNames={setRestoredTeamNames}
           setMatches={setMatches}
           setTeams={setTeams}
           teams={teams}
@@ -1391,9 +1409,11 @@ function AdminPanel({
   participantsSyncStatus,
   reloadParticipantsFromSupabase,
   setAdminLoggedIn,
+  setAutomaticEliminatedTeamNames,
   setEliminatedTeamNames,
   setMatches,
   setParticipantsError,
+  setRestoredTeamNames,
   setTeams,
   teams,
 }: {
@@ -1414,9 +1434,11 @@ function AdminPanel({
   participantsSyncStatus: ParticipantsSyncStatus;
   reloadParticipantsFromSupabase: () => Promise<void>;
   setAdminLoggedIn: (value: boolean) => void;
+  setAutomaticEliminatedTeamNames: React.Dispatch<React.SetStateAction<string[]>>;
   setEliminatedTeamNames: React.Dispatch<React.SetStateAction<string[]>>;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
   setParticipantsError: React.Dispatch<React.SetStateAction<string>>;
+  setRestoredTeamNames: React.Dispatch<React.SetStateAction<string[]>>;
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
   teams: Team[];
 }) {
@@ -1431,7 +1453,6 @@ function AdminPanel({
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
   const [scoreStatus, setScoreStatus] = useState<MatchStatus>("scheduled");
-  const [teamToEliminate, setTeamToEliminate] = useState(firstTeamName);
   const groupValidationWarnings = useMemo(
     () => validateGroupStageData(teams, matches),
     [matches, teams],
@@ -1439,14 +1460,12 @@ function AdminPanel({
 
   useEffect(() => {
     if (!participantPick && firstTeamName) setParticipantPick(firstTeamName);
-    if (!teamToEliminate && firstTeamName) setTeamToEliminate(firstTeamName);
     if (!scoreMatchId && firstMatchId) setScoreMatchId(firstMatchId);
   }, [
     firstMatchId,
     firstTeamName,
     participantPick,
     scoreMatchId,
-    teamToEliminate,
   ]);
 
   if (!adminLoggedIn) {
@@ -1549,6 +1568,8 @@ function AdminPanel({
   }
 
   async function markEliminated(teamName: string) {
+    if (!window.confirm(ui.confirmEliminateTeam)) return;
+
     setParticipantsError("");
 
     setTeams((current) =>
@@ -1556,6 +1577,7 @@ function AdminPanel({
         team.name === teamName ? { ...team, status: "eliminated" } : team,
       ),
     );
+    setRestoredTeamNames((current) => current.filter((name) => name !== teamName));
     setEliminatedTeamNames((current) =>
       Array.from(new Set([...current, teamName])).sort((first, second) =>
         first.localeCompare(second),
@@ -1573,6 +1595,40 @@ function AdminPanel({
       await Promise.all(
         participantsToEliminate.map((participant) =>
           updateParticipant(participant.id, { status: "eliminated" }),
+        ),
+      );
+      await reloadParticipantsFromSupabase();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ui.databaseNotReady;
+      setParticipantsError(`${ui.supabaseSaveFailed} ${message}`);
+    }
+  }
+
+  async function restoreTeam(teamName: string) {
+    if (!window.confirm(ui.confirmRestoreTeam)) return;
+
+    setParticipantsError("");
+    setTeams((current) =>
+      current.map((team) =>
+        team.name === teamName ? { ...team, status: "active" } : team,
+      ),
+    );
+    setEliminatedTeamNames((current) => current.filter((name) => name !== teamName));
+    setAutomaticEliminatedTeamNames((current) => current.filter((name) => name !== teamName));
+    setRestoredTeamNames((current) =>
+      Array.from(new Set([...current, teamName])).sort((first, second) =>
+        first.localeCompare(second),
+      ),
+    );
+
+    const participantsToRestore = participants.filter(
+      (participant) => participant.selectedChampionTeam === teamName,
+    );
+
+    try {
+      await Promise.all(
+        participantsToRestore.map((participant) =>
+          updateParticipant(participant.id, { status: "active" }),
         ),
       );
       await reloadParticipantsFromSupabase();
@@ -1677,22 +1733,35 @@ function AdminPanel({
           <button type="submit" disabled={matches.length === 0}>{ui.updateScore}</button>
         </form>
 
-        <div className="admin-card">
-          <h3>{ui.eliminateTeam}</h3>
+        <div className="admin-card team-status-card">
+          <h3>{ui.teamStatusManagement}</h3>
           {teams.length === 0 ? (
             <p className="empty-state">{ui.teamsUnavailable}</p>
-          ) : null}
-          <label>
-            {ui.team}
-            <select value={teamToEliminate} onChange={(event) => setTeamToEliminate(event.target.value)}>
-              {teams.map((team) => (
-                <option key={team.name} value={team.name}>{translateTeamName(team.name)}</option>
-              ))}
-            </select>
-          </label>
-          <button type="button" disabled={teams.length === 0 || participantsLoading} onClick={() => void markEliminated(teamToEliminate)}>
-            {ui.markEliminated}
-          </button>
+          ) : (
+            <ul className="team-status-list">
+              {teams.map((team) => {
+                const isEliminated = team.status === "eliminated";
+
+                return (
+                  <li key={team.name}>
+                    <div>
+                      <strong>{translateTeamName(team.name)}</strong>
+                      <span className={`status-badge ${isEliminated ? "eliminated" : "active"}`}>
+                        {isEliminated ? ui.teamEliminated : ui.teamActive}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={participantsLoading}
+                      onClick={() => void (isEliminated ? restoreTeam(team.name) : markEliminated(team.name))}
+                    >
+                      {isEliminated ? ui.restoreTeam : ui.markEliminated}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           <p className="rule-note">{ui.eliminationRule}</p>
         </div>
 

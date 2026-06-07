@@ -21,11 +21,14 @@ export const TEAM_NAME_HEBREW_MAP: Record<string, string> = {
   "Cote d'Ivoire": "חוף השנהב",
   "Côte d'Ivoire": "חוף השנהב",
   Croatia: "קרואטיה",
+  Curacao: "קוראסאו",
   Curaçao: "קוראסאו",
   "Czech Republic": "צ'כיה",
   Czechia: "צ'כיה",
   Denmark: "דנמרק",
   "DR Congo": "הרפובליקה הדמוקרטית של קונגו",
+  "Congo DR": "הרפובליקה הדמוקרטית של קונגו",
+  Congo: "קונגו",
   Ecuador: "אקוודור",
   Egypt: "מצרים",
   "El Salvador": "אל סלוודור",
@@ -81,6 +84,7 @@ export const TEAM_NAME_HEBREW_MAP: Record<string, string> = {
   Slovenia: "סלובניה",
   "South Africa": "דרום אפריקה",
   "South Korea": "דרום קוריאה",
+  "Korea DPR": "קוריאה הצפונית",
   Sudan: "סודאן",
   Syria: "סוריה",
   Spain: "ספרד",
@@ -98,6 +102,7 @@ export const TEAM_NAME_HEBREW_MAP: Record<string, string> = {
   UAE: "איחוד האמירויות",
   USA: "ארצות הברית",
   "United States": "ארצות הברית",
+  "United States of America": "ארצות הברית",
   Uzbekistan: "אוזבקיסטן",
   Venezuela: "ונצואלה",
   Vietnam: "וייטנאם",
@@ -106,6 +111,25 @@ export const TEAM_NAME_HEBREW_MAP: Record<string, string> = {
   Zimbabwe: "זימבבואה",
 };
 
+const TEAM_NAME_ALIASES: Record<string, string> = {
+  "Bosnia-Herzegovina": "Bosnia and Herzegovina",
+  "Bosnia Herzegovina": "Bosnia and Herzegovina",
+  "Cape Verde Islands": "Cape Verde",
+  "Congo DR": "DR Congo",
+  "Cote d'Ivoire": "Ivory Coast",
+  "Côte d'Ivoire": "Ivory Coast",
+  Curacao: "Curaçao",
+  "Korea Republic": "South Korea",
+  "United States of America": "United States",
+  USA: "United States",
+};
+
 export function translateTeamName(teamName: string) {
-  return TEAM_NAME_HEBREW_MAP[teamName] ?? teamName;
+  const trimmedName = teamName.trim();
+  const aliasedName = TEAM_NAME_ALIASES[trimmedName] ?? trimmedName;
+  const caseInsensitiveKey = Object.keys(TEAM_NAME_HEBREW_MAP).find(
+    (key) => key.toLowerCase() === aliasedName.toLowerCase(),
+  );
+
+  return TEAM_NAME_HEBREW_MAP[aliasedName] ?? (caseInsensitiveKey ? TEAM_NAME_HEBREW_MAP[caseInsensitiveKey] : teamName);
 }

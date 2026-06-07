@@ -511,6 +511,23 @@ th {
   gap: 18px;
 }
 
+.admin-sync-debug {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -4px 0 18px;
+  color: #425466;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.admin-sync-debug span {
+  padding: 8px 10px;
+  border: 1px solid #dfe6ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;

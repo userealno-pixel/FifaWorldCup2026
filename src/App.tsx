@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createApiFootballStatus,
   getSharedApiCache,
@@ -33,6 +33,7 @@ type Match = AppMatch;
 type MatchStatus = AppMatchStatus;
 
 type Participant = StoredParticipant;
+type ParticipantsSyncStatus = "idle" | "syncing" | "active" | "error";
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? "123456";
 
@@ -133,6 +134,12 @@ const ui = {
   supabaseNotConnected: "Supabase לא מחובר",
   realtimeActive: "סנכרון חי פעיל",
   realtimeInactive: "סנכרון חי לא פעיל",
+  syncStatus: "סטטוס סנכרון",
+  lastParticipantsSync: "סנכרון משתתפים אחרון",
+  participantsLoadedCount: "משתתפים נטענו",
+  syncActive: "סנכרון פעיל",
+  syncLoading: "מסנכרן",
+  syncError: "שגיאת סנכרון",
   supabaseLoadFailed: "טעינת המשתתפים מ-Supabase נכשלה.",
   supabaseSaveFailed: "שמירת המשתתף ב-Supabase נכשלה.",
   supabaseDeleteFailed: "מחיקת המשתתף מ-Supabase נכשלה.",
@@ -377,6 +384,13 @@ function upsertParticipant(current: Participant[], nextParticipant: Participant)
   );
 }
 
+function translateParticipantsSyncStatus(status: ParticipantsSyncStatus) {
+  if (status === "syncing") return ui.syncLoading;
+  if (status === "error") return ui.syncError;
+  if (status === "active") return ui.syncActive;
+  return ui.pending;
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<Tab>("schedule");
   const [teams, setTeams] = useState<Team[]>([]);
@@ -385,12 +399,16 @@ export function App() {
   const [participantsLoading, setParticipantsLoading] = useState(true);
   const [participantsError, setParticipantsError] = useState("");
   const [participantsRealtimeActive, setParticipantsRealtimeActive] = useState(false);
+  const [participantsLastSyncedAt, setParticipantsLastSyncedAt] = useState<string | null>(null);
+  const [participantsLoadedCount, setParticipantsLoadedCount] = useState(0);
+  const [participantsSyncStatus, setParticipantsSyncStatus] = useState<ParticipantsSyncStatus>("idle");
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [apiStatus, setApiStatus] = useState<ApiFootballStatus>(
     createApiFootballStatus({ loading: true }),
   );
   const [now, setNow] = useState(Date.now());
+  const appMountedRef = useRef(true);
 
   useEffect(() => {
     document.documentElement.dir = "rtl";
@@ -398,32 +416,52 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadParticipants() {
-      setParticipantsLoading(true);
-      setParticipantsError("");
-
-      try {
-        const storedParticipants = await fetchParticipants();
-        if (!isMounted) return;
-        setParticipants(storedParticipants);
-      } catch (error) {
-        if (!isMounted) return;
-        const message = error instanceof Error ? error.message : ui.databaseNotReady;
-        setParticipants([]);
-        setParticipantsError(`${ui.supabaseLoadFailed} ${message}`);
-      } finally {
-        if (isMounted) setParticipantsLoading(false);
-      }
-    }
-
-    loadParticipants();
+    appMountedRef.current = true;
 
     return () => {
-      isMounted = false;
+      appMountedRef.current = false;
     };
   }, []);
+
+  const reloadParticipantsFromSupabase = useCallback(
+    async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
+      if (showLoading) setParticipantsLoading(true);
+      setParticipantsSyncStatus("syncing");
+
+      try {
+        const storedParticipants = sortParticipantsByCreatedAt(await fetchParticipants());
+        if (!appMountedRef.current) return;
+
+        setParticipants(storedParticipants);
+        setParticipantsLoadedCount(storedParticipants.length);
+        setParticipantsLastSyncedAt(new Date().toISOString());
+        setParticipantsError("");
+        setParticipantsSyncStatus("active");
+      } catch (error) {
+        console.error("Supabase participants reload failed", error);
+        if (!appMountedRef.current) return;
+
+        const message = error instanceof Error ? error.message : ui.databaseNotReady;
+        setParticipantsError(`${ui.supabaseLoadFailed} ${message}`);
+        setParticipantsSyncStatus("error");
+      } finally {
+        if (appMountedRef.current && showLoading) setParticipantsLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    void reloadParticipantsFromSupabase({ showLoading: true });
+
+    const intervalId = window.setInterval(() => {
+      void reloadParticipantsFromSupabase();
+    }, 5_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [reloadParticipantsFromSupabase]);
 
   useEffect(() => {
     if (!supabase) {
@@ -482,29 +520,6 @@ export function App() {
     return () => {
       setParticipantsRealtimeActive(false);
       realtimeClient.removeChannel(channel);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!supabase) return;
-
-    let isMounted = true;
-
-    async function syncParticipantsFromSupabase() {
-      try {
-        const storedParticipants = await fetchParticipants();
-        if (!isMounted) return;
-        setParticipants(sortParticipantsByCreatedAt(storedParticipants));
-      } catch (error) {
-        console.error("Supabase participants fallback sync failed", error);
-      }
-    }
-
-    const intervalId = window.setInterval(syncParticipantsFromSupabase, 5_000);
-
-    return () => {
-      isMounted = false;
-      window.clearInterval(intervalId);
     };
   }, []);
 
@@ -587,7 +602,8 @@ export function App() {
   const nextRefreshInMs = apiStatus.nextRefreshAt
     ? new Date(apiStatus.nextRefreshAt).getTime() - now
     : 0;
-  const participantsSyncActive = Boolean(supabase) || participantsRealtimeActive;
+  const participantsSyncActive =
+    participantsSyncStatus === "active" || Boolean(supabase) || participantsRealtimeActive;
 
   function handleLogin(password: string) {
     if (password === ADMIN_PASSWORD) {
@@ -669,14 +685,17 @@ export function App() {
           onLogin={handleLogin}
           participants={participants}
           participantsError={participantsError}
+          participantsLastSyncedAt={participantsLastSyncedAt}
+          participantsLoadedCount={participantsLoadedCount}
           participantsLoading={participantsLoading}
           participantsRealtimeActive={participantsSyncActive}
+          participantsSyncStatus={participantsSyncStatus}
           apiStatus={apiStatus}
           nextRefreshInMs={nextRefreshInMs}
+          reloadParticipantsFromSupabase={reloadParticipantsFromSupabase}
           setAdminLoggedIn={setAdminLoggedIn}
           setParticipantsError={setParticipantsError}
           setMatches={setMatches}
-          setParticipants={setParticipants}
           setTeams={setTeams}
           teams={teams}
         />
@@ -1245,11 +1264,14 @@ function AdminPanel({
   onLogin,
   participants,
   participantsError,
+  participantsLastSyncedAt,
+  participantsLoadedCount,
   participantsLoading,
   participantsRealtimeActive,
+  participantsSyncStatus,
+  reloadParticipantsFromSupabase,
   setAdminLoggedIn,
   setMatches,
-  setParticipants,
   setParticipantsError,
   setTeams,
   teams,
@@ -1262,11 +1284,14 @@ function AdminPanel({
   onLogin: (password: string) => void;
   participants: Participant[];
   participantsError: string;
+  participantsLastSyncedAt: string | null;
+  participantsLoadedCount: number;
   participantsLoading: boolean;
   participantsRealtimeActive: boolean;
+  participantsSyncStatus: ParticipantsSyncStatus;
+  reloadParticipantsFromSupabase: () => Promise<void>;
   setAdminLoggedIn: (value: boolean) => void;
   setMatches: React.Dispatch<React.SetStateAction<Match[]>>;
-  setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
   setParticipantsError: React.Dispatch<React.SetStateAction<string>>;
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
   teams: Team[];
@@ -1341,25 +1366,20 @@ function AdminPanel({
 
     try {
       if (editingParticipantId !== null) {
-        const updatedParticipant = await updateParticipant(editingParticipantId, {
+        await updateParticipant(editingParticipantId, {
           name: participantName.trim(),
           selectedChampionTeam: participantPick,
           status: participantStatus,
         });
-        setParticipants((current) =>
-          current.map((participant) =>
-            participant.id === editingParticipantId ? updatedParticipant : participant,
-          ),
-        );
         setEditingParticipantId(null);
       } else {
-        const newParticipant = await insertParticipant(
+        await insertParticipant(
           participantName.trim(),
           participantPick,
         );
-        setParticipants((current) => upsertParticipant(current, newParticipant));
       }
 
+      await reloadParticipantsFromSupabase();
       setParticipantName("");
       setParticipantPick(firstTeamName);
     } catch (error) {
@@ -1381,7 +1401,7 @@ function AdminPanel({
 
     try {
       await deleteParticipant(id);
-      setParticipants((current) => current.filter((participant) => participant.id !== id));
+      await reloadParticipantsFromSupabase();
     } catch (error) {
       const message = error instanceof Error ? error.message : ui.databaseNotReady;
       setParticipantsError(`${ui.supabaseDeleteFailed} ${message}`);
@@ -1421,18 +1441,12 @@ function AdminPanel({
     if (participantsToEliminate.length === 0) return;
 
     try {
-      const updatedParticipants = await Promise.all(
+      await Promise.all(
         participantsToEliminate.map((participant) =>
           updateParticipant(participant.id, { status: "eliminated" }),
         ),
       );
-      const updatedById = new Map(
-        updatedParticipants.map((participant) => [participant.id, participant]),
-      );
-
-      setParticipants((current) =>
-        current.map((participant) => updatedById.get(participant.id) ?? participant),
-      );
+      await reloadParticipantsFromSupabase();
     } catch (error) {
       const message = error instanceof Error ? error.message : ui.databaseNotReady;
       setParticipantsError(`${ui.supabaseSaveFailed} ${message}`);
@@ -1456,6 +1470,14 @@ function AdminPanel({
           {ui.logout}
         </button>
       </div>
+
+      <section className="admin-sync-debug" aria-label={ui.syncStatus}>
+        <span>{ui.syncStatus}: {translateParticipantsSyncStatus(participantsSyncStatus)}</span>
+        <span>
+          {ui.lastParticipantsSync}: {participantsLastSyncedAt ? formatDateTime(participantsLastSyncedAt) : ui.pending}
+        </span>
+        <span>{ui.participantsLoadedCount}: {participantsLoadedCount}</span>
+      </section>
 
       <div className="admin-grid">
         <form className="admin-card" onSubmit={saveParticipant}>
